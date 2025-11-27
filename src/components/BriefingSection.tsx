@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Grid3X3, 
-  List, 
+import {
+  Search,
+  Grid3X3,
+  List,
   FileText,
   Filter
 } from "lucide-react";
@@ -22,7 +22,7 @@ interface BriefingMaterial {
   status: 'client_approval' | 'internal_approval' | 'pending' | 'approved' | 'needs_adjustment' | 'rejected';
   comments: number;
   caption?: string;
-  
+
   briefing_approved_by_client?: boolean;
 }
 
@@ -54,7 +54,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           .select('caption, id')
           .eq('id', viewingBriefing)
           .single();
-        
+
         setCurrentBriefingData(data);
         onBriefingView?.(data);
       } else {
@@ -69,12 +69,12 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
   const loadBriefings = async () => {
     try {
       setLoading(true);
-      
+
       const { data: briefingData, error } = await supabase
         .from('materials')
         .select('id, name, type, status, caption, wireframe_data, briefing_approved_by_client')
         .eq('project_id', projectId)
-        .in('type', ['wireframe', 'carousel', 'video'])
+        .in('type', ['wireframe', 'carousel', 'video', 'image'])
         .eq('is_briefing', true)
         .eq('briefing_approved_by_client', false)
         .order('created_at', { ascending: false });
@@ -88,7 +88,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
         status: briefing.status as BriefingMaterial['status'],
         comments: 0, // TODO: contar comentários
         caption: briefing.caption || undefined,
-        
+
       }));
 
       setBriefings(processedBriefings);
@@ -137,7 +137,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
     const filtered = briefings.filter(briefing => {
       const matchesSearch = briefing.name.toLowerCase().includes(searchTerm.toLowerCase());
       let matchesStatus = statusFilter === 'all';
-      
+
       if (!matchesStatus) {
         if (statusFilter === 'needs_adjustment') {
           // Inclui tanto needs_adjustment quanto rejected no filtro de ajustes
@@ -146,7 +146,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           matchesStatus = briefing.status === statusFilter;
         }
       }
-      
+
       return matchesSearch && matchesStatus;
     });
     setFilteredBriefings(filtered);
@@ -164,7 +164,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
   // Se está visualizando um briefing específico
   if (viewingBriefing) {
     return (
-      <BriefingViewer 
+      <BriefingViewer
         briefingId={viewingBriefing}
         projectId={projectId}
         onBack={() => {
@@ -208,10 +208,9 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card 
-          className={`border-0 cursor-pointer transition-all duration-200 ${
-            statusFilter === 'all' ? 'ring-2 ring-primary bg-primary/5' : 'hover:shadow-md'
-          }`}
+        <Card
+          className={`border-0 cursor-pointer transition-all duration-200 ${statusFilter === 'all' ? 'ring-2 ring-primary bg-primary/5' : 'hover:shadow-md'
+            }`}
           onClick={() => setStatusFilter(statusFilter === 'all' ? 'all' : 'all')}
         >
           <CardContent className="p-4">
@@ -226,12 +225,11 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
             </div>
           </CardContent>
         </Card>
-        
-        
-        <Card 
-          className={`border-0 cursor-pointer transition-all duration-200 ${
-            statusFilter === 'internal_approval' ? 'ring-2 ring-purple-500 bg-purple-500/10' : 'hover:shadow-md'
-          }`}
+
+
+        <Card
+          className={`border-0 cursor-pointer transition-all duration-200 ${statusFilter === 'internal_approval' ? 'ring-2 ring-purple-500 bg-purple-500/10' : 'hover:shadow-md'
+            }`}
           onClick={() => setStatusFilter(statusFilter === 'internal_approval' ? 'all' : 'internal_approval')}
         >
           <CardContent className="p-4">
@@ -247,10 +245,9 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           </CardContent>
         </Card>
 
-        <Card 
-          className={`border-0 cursor-pointer transition-all duration-200 ${
-            statusFilter === 'pending' ? 'ring-2 ring-warning bg-warning/5' : 'hover:shadow-md'
-          }`}
+        <Card
+          className={`border-0 cursor-pointer transition-all duration-200 ${statusFilter === 'pending' ? 'ring-2 ring-warning bg-warning/5' : 'hover:shadow-md'
+            }`}
           onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
         >
           <CardContent className="p-4">
@@ -266,10 +263,9 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           </CardContent>
         </Card>
 
-        <Card 
-          className={`border-0 cursor-pointer transition-all duration-200 ${
-            statusFilter === 'needs_adjustment' || statusFilter === 'rejected' ? 'ring-2 ring-destructive bg-destructive/5' : 'hover:shadow-md'
-          }`}
+        <Card
+          className={`border-0 cursor-pointer transition-all duration-200 ${statusFilter === 'needs_adjustment' || statusFilter === 'rejected' ? 'ring-2 ring-destructive bg-destructive/5' : 'hover:shadow-md'
+            }`}
           onClick={() => {
             if (statusFilter === 'needs_adjustment' || statusFilter === 'rejected') {
               setStatusFilter('all');
@@ -312,12 +308,12 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           <p className="text-muted-foreground">Carregando briefings...</p>
         </div>
       ) : (
-        <MaterialsGrid 
+        <MaterialsGrid
           materials={filteredBriefings.map(briefing => ({
             ...briefing,
             is_briefing: true,
             briefing_approved_by_client: briefing.briefing_approved_by_client
-          }))} 
+          }))}
           viewMode={viewMode}
           onMaterialUpdated={loadBriefings}
           onMaterialClick={(id) => setViewingBriefing(id)}

@@ -319,9 +319,11 @@ const BriefingEditor = () => {
     try {
       setSaving(true);
 
-      // Gerar thumbnail do Canvas (data URL para salvar no banco)
+      // Gerar thumbnail do Canvas (apenas se não for mídia gerada por IA)
       let thumbnailDataUrl = null;
-      if (visualizationContent) {
+      const isGeneratedMedia = ['carousel', 'video', 'image'].includes(materialType);
+
+      if (visualizationContent && !isGeneratedMedia) {
         try {
           // Criar canvas temporário off-screen para renderizar a thumbnail
           const tempCanvas = document.createElement('canvas');
@@ -350,13 +352,19 @@ const BriefingEditor = () => {
         }
       }
 
+      const updateData: any = {
+        canvas_data: visualizationContent,
+        updated_at: new Date().toISOString()
+      };
+
+      // Só atualizar thumbnail se foi gerada uma nova (para canvas)
+      if (thumbnailDataUrl) {
+        updateData.thumbnail_url = thumbnailDataUrl;
+      }
+
       const { error } = await supabase
         .from('materials')
-        .update({
-          canvas_data: visualizationContent,
-          thumbnail_url: thumbnailDataUrl,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', briefingId);
 
       if (error) throw error;
