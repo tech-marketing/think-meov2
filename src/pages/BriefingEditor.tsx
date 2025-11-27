@@ -78,6 +78,26 @@ const BriefingEditor = () => {
         throw new Error(`A resposta do Webhook não é um JSON válido: "${responseText}". Verifique se o cenário no Make.com possui um módulo "Webhook Response".`);
       }
 
+      // Função para limpar URLs do Google Storage
+      const cleanGoogleStorageUrl = (url: string) => {
+        if (!url) return url;
+        // Se for uma URL da API do Google Storage, converter para URL pública
+        // Ex: https://www.googleapis.com/storage/v1/b/bucket/o/path%2Fto%2Ffile
+        if (url.includes('www.googleapis.com/storage/v1/b/')) {
+          try {
+            const match = url.match(/b\/([^/]+)\/o\/([^?]+)/);
+            if (match) {
+              const bucket = match[1];
+              const path = decodeURIComponent(match[2]);
+              return `https://storage.googleapis.com/${bucket}/${path}`;
+            }
+          } catch (e) {
+            console.error('Erro ao limpar URL:', e);
+          }
+        }
+        return url;
+      };
+
       // Atualizar o material com os dados retornados
       let finalFileUrl = null;
       let slides = [];
@@ -97,6 +117,9 @@ const BriefingEditor = () => {
           }
         }
 
+        // Limpar URLs
+        mediaUrls = mediaUrls.map(cleanGoogleStorageUrl);
+
         if (mediaUrls.length > 0) {
           // Se for carrossel, salvar array de URLs como JSON string no file_url
           if (data.type === 'carousel' || mediaUrls.length > 1) {
@@ -114,6 +137,9 @@ const BriefingEditor = () => {
       // Fallback para outros campos se não achou em media_urls
       if (!finalFileUrl) {
         finalFileUrl = data.file_url || data.url || data.criativo_url;
+        if (finalFileUrl) {
+          finalFileUrl = cleanGoogleStorageUrl(finalFileUrl);
+        }
       }
 
       // Se não encontrou URL direta, tentar construir a partir do creative_id (caminho do GCS)
@@ -168,8 +194,8 @@ const BriefingEditor = () => {
         status: 'pending',
         file_url: finalFileUrl,
         thumbnail_url: data.thumbnail_url || data.thumbnail,
-        caption: data.caption || data.legenda,
-        copy: data.ad_copy || data.copy || data.text,
+        caption: data.caption || data.legenda || data.legenda_criativo,
+        copy: data.ad_copy || data.copy || data.text || data.legenda_criativo,
         name: data.name || briefing?.name || 'Novo Criativo',
         // Atualizar o tipo se vier no payload (usando o tipo normalizado)
         ...(normalizedType && { type: normalizedType }),
