@@ -134,11 +134,33 @@ const BriefingEditor = () => {
       }
 
       // Normalizar o tipo de material para satisfazer a constraint do banco
+      // Allowed types: 'wireframe', 'video', 'image', 'carousel'
       let normalizedType = data.type?.toLowerCase();
+
       if (normalizedType === 'static_image' || normalizedType === 'static') {
         normalizedType = 'image';
       } else if (normalizedType === 'reels' || normalizedType === 'reel') {
         normalizedType = 'video';
+      }
+
+      // Validar se o tipo está na lista de permitidos
+      const allowedTypes = ['wireframe', 'video', 'image', 'carousel'];
+      if (!allowedTypes.includes(normalizedType)) {
+        // Tentar inferir pelo arquivo ou conteúdo
+        if (slides.length > 0) {
+          normalizedType = 'carousel';
+        } else if (finalFileUrl && typeof finalFileUrl === 'string') {
+          if (finalFileUrl.match(/\.mp4$/i)) {
+            normalizedType = 'video';
+          } else if (finalFileUrl.match(/\.(jpeg|jpg|gif|png)$/i)) {
+            normalizedType = 'image';
+          } else {
+            // Default seguro se não conseguir inferir
+            normalizedType = 'image';
+          }
+        } else {
+          normalizedType = 'image';
+        }
       }
 
       // Preparar dados de atualização
