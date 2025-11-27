@@ -81,20 +81,37 @@ const BriefingEditor = () => {
       // Função para limpar URLs do Google Storage
       const cleanGoogleStorageUrl = (url: string) => {
         if (!url) return url;
-        // Se for uma URL da API do Google Storage, converter para URL pública
-        // Ex: https://www.googleapis.com/storage/v1/b/bucket/o/path%2Fto%2Ffile
-        if (url.includes('www.googleapis.com/storage/v1/b/')) {
-          try {
+
+        try {
+          // Se for uma URL da API do Google Storage, converter para URL pública
+          // Ex: https://www.googleapis.com/storage/v1/b/bucket/o/path%2Fto%2Ffile
+          if (url.includes('googleapis.com/storage/v1/b/')) {
             const match = url.match(/b\/([^/]+)\/o\/([^?]+)/);
             if (match) {
               const bucket = match[1];
-              const path = decodeURIComponent(match[2]);
+              // Decodificar duas vezes para garantir (algumas URLs vêm duplamente encodadas)
+              let path = decodeURIComponent(match[2]);
+              try {
+                path = decodeURIComponent(path);
+              } catch (e) {
+                // Ignorar erro se não der para decodificar de novo
+              }
               return `https://storage.googleapis.com/${bucket}/${path}`;
             }
-          } catch (e) {
-            console.error('Erro ao limpar URL:', e);
           }
+
+          // Se for uma URL autenticada do storage (com query params de assinatura), tentar limpar
+          if (url.includes('storage.googleapis.com') && url.includes('X-Goog-Algorithm')) {
+            // Manter a URL assinada pois ela é necessária para acesso privado, 
+            // ou se for pública, remover os params.
+            // Por segurança, vamos tentar usar a URL limpa se for pública
+            const cleanUrl = url.split('?')[0];
+            return cleanUrl;
+          }
+        } catch (e) {
+          console.error('Erro ao limpar URL:', e);
         }
+
         return url;
       };
 
@@ -117,8 +134,10 @@ const BriefingEditor = () => {
           }
         }
 
-        // Limpar URLs
-        mediaUrls = mediaUrls.map(cleanGoogleStorageUrl);
+        // Limpar URLs e filtrar vazias
+        mediaUrls = mediaUrls
+          .map(cleanGoogleStorageUrl)
+          .filter(url => url && url.length > 0);
 
         if (mediaUrls.length > 0) {
           // Se for carrossel, salvar array de URLs como JSON string no file_url
@@ -197,6 +216,9 @@ const BriefingEditor = () => {
         caption: data.caption || data.legenda || data.legenda_criativo,
         copy: data.ad_copy || data.copy || data.text || data.legenda_criativo,
         name: data.name || briefing?.name || 'Novo Criativo',
+        // Garantir que apareça na seção de Briefings
+        is_briefing: true,
+        briefing_approved_by_client: false,
         // Atualizar o tipo se vier no payload (usando o tipo normalizado)
         ...(normalizedType && { type: normalizedType }),
         // Limpar o payload para não reprocessar
