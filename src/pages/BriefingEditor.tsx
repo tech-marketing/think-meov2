@@ -133,6 +133,14 @@ const BriefingEditor = () => {
         }
       }
 
+      // Normalizar o tipo de material para satisfazer a constraint do banco
+      let normalizedType = data.type?.toLowerCase();
+      if (normalizedType === 'static_image' || normalizedType === 'static') {
+        normalizedType = 'image';
+      } else if (normalizedType === 'reels' || normalizedType === 'reel') {
+        normalizedType = 'video';
+      }
+
       // Preparar dados de atualização
       const updateData: any = {
         status: 'pending',
@@ -141,8 +149,8 @@ const BriefingEditor = () => {
         caption: data.caption || data.legenda,
         copy: data.ad_copy || data.copy || data.text,
         name: data.name || briefing?.name || 'Novo Criativo',
-        // Atualizar o tipo se vier no payload
-        ...(data.type && { type: data.type }),
+        // Atualizar o tipo se vier no payload (usando o tipo normalizado)
+        ...(normalizedType && { type: normalizedType }),
         // Limpar o payload para não reprocessar
         metadata: {
           ...briefing?.metadata,
