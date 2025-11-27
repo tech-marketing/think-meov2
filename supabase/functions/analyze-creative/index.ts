@@ -1,0 +1,1036 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface CreativeData {
+  ad_id: string;
+  ad_name: string;
+  campaign_name: string;
+  image_url?: string;
+  video_url?: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  ctr: number;
+  cpc: number;
+  conversions: number;
+  conversion_rate: number;
+  roas: number;
+}
+
+// ============================================================================
+// HELPERS: Utilitários
+// ============================================================================
+
+// Detectar se URL é de vídeo
+function isVideoUrl(url: string): boolean {
+  if (!url) return false;
+  const urlLower = url.toLowerCase();
+  return (
+    urlLower.endsWith(".mp4") ||
+    urlLower.endsWith(".mov") ||
+    urlLower.endsWith(".m4v") ||
+    urlLower.endsWith(".webm") ||
+    urlLower.includes(".mp4?") ||
+    urlLower.includes(".mov?")
+  );
+}
+
+// Upload de imagem para Gemini File API
+async function uploadImageToGemini(imageUrl: string, apiKey: string): Promise<{ uri: string; mimeType: string }> {
+  console.log(`📤 Fazendo upload de imagem para Gemini: ${imageUrl.substring(0, 100)}...`);
+
+  try {
+    // 1. Download da imagem
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`Falha ao baixar imagem: ${imageResponse.status}`);
+    }
+
+    const imageBlob = await imageResponse.blob();
+    const imageBuffer = await imageBlob.arrayBuffer();
+
+    // 2. Detectar mimeType
+    let mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
+    if (!mimeType.startsWith("image/")) {
+      // Fallback por extensão
+      if (imageUrl.toLowerCase().includes(".png")) mimeType = "image/png";
+      else if (imageUrl.toLowerCase().includes(".webp")) mimeType = "image/webp";
+      else mimeType = "image/jpeg";
+    }
+
+    console.log(`✅ Imagem baixada: ${imageBuffer.byteLength} bytes (${mimeType})`);
+
+    // 3. Upload para Gemini File API
+    const formData = new FormData();
+    const extension = mimeType.split("/")[1] || "jpg";
+    formData.append("file", new Blob([imageBuffer], { type: mimeType }), `image.${extension}`);
+
+    const uploadResponse = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Gemini File API error: ${uploadResponse.status} - ${errorText}`);
+    }
+
+    const fileData = await uploadResponse.json();
+    const fileName = fileData.file?.name;
+
+    if (!fileName) {
+      throw new Error("Gemini não retornou nome do arquivo");
+    }
+
+    console.log(`✅ Imagem enviada para Gemini: ${fileName}`);
+
+    // 4. Aguardar processamento (ACTIVE state)
+    let attempts = 0;
+    const maxAttempts = 15; // 15 segundos para imagens (mais rápido que vídeo)
+
+    while (attempts < maxAttempts) {
+      const statusResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`, {
+        method: "GET",
+      });
+
+      const statusData = await statusResponse.json();
+
+      if (statusData.state === "ACTIVE") {
+        const geminiUri = statusData.uri;
+        console.log(`✅ Imagem processada: ${geminiUri}`);
+        return { uri: geminiUri, mimeType };
+      }
+
+      if (statusData.state === "FAILED") {
+        throw new Error("Gemini falhou ao processar imagem");
+      }
+
+      console.log(`⏳ Aguardando processamento de imagem... (${attempts + 1}/${maxAttempts})`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    throw new Error("Timeout ao aguardar processamento da imagem");
+  } catch (error) {
+    console.error("❌ Erro ao fazer upload de imagem para Gemini:", error);
+    throw error;
+  }
+}
+
+// Upload de vídeo para Gemini File API
+async function uploadVideoToGemini(videoUrl: string, apiKey: string): Promise<string> {
+  console.log(`📤 Fazendo upload de vídeo para Gemini: ${videoUrl.substring(0, 100)}...`);
+
+  try {
+    // 1. Download do vídeo do GCS
+    const videoResponse = await fetch(videoUrl);
+    if (!videoResponse.ok) {
+      throw new Error(`Falha ao baixar vídeo: ${videoResponse.status}`);
+    }
+    const videoBlob = await videoResponse.blob();
+    const videoBuffer = await videoBlob.arrayBuffer();
+
+    console.log(`✅ Vídeo baixado: ${videoBuffer.byteLength} bytes`);
+
+    // 2. Upload para Gemini File API
+    const formData = new FormData();
+    formData.append("file", new Blob([videoBuffer], { type: "video/mp4" }), "video.mp4");
+
+    const uploadResponse = await fetch(`https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Gemini File API error: ${uploadResponse.status} - ${errorText}`);
+    }
+
+    const fileData = await uploadResponse.json();
+    const fileName = fileData.file?.name;
+
+    if (!fileName) {
+      throw new Error("Gemini não retornou nome do arquivo");
+    }
+
+    console.log(`✅ Vídeo enviado para Gemini: ${fileName}`);
+
+    // 3. Aguardar processamento do vídeo (estado PROCESSING → ACTIVE)
+    let attempts = 0;
+    const maxAttempts = 30; // 30 segundos máximo
+
+    while (attempts < maxAttempts) {
+      const statusResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`, {
+        method: "GET",
+      });
+
+      const statusData = await statusResponse.json();
+
+      if (statusData.state === "ACTIVE") {
+        const geminiUri = statusData.uri;
+        console.log(`✅ Vídeo processado e pronto: ${geminiUri}`);
+        return geminiUri;
+      }
+
+      if (statusData.state === "FAILED") {
+        throw new Error("Gemini falhou ao processar vídeo");
+      }
+
+      console.log(`⏳ Aguardando processamento... (${attempts + 1}/${maxAttempts}) - Estado: ${statusData.state}`);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    throw new Error("Timeout ao aguardar processamento do vídeo");
+  } catch (error) {
+    console.error("❌ Erro ao fazer upload de vídeo para Gemini:", error);
+    throw error;
+  }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const requestBody = await req.json();
+
+    // Detectar se é análise individual ou em grupo
+    console.log("🔀 Detectando tipo de análise:", {
+      hasCreatives: !!requestBody.creatives,
+      hasAnalysisType: !!requestBody.analysisType,
+      hasAdName: !!requestBody.ad_name,
+      allKeys: Object.keys(requestBody),
+    });
+
+    if (requestBody.creatives && requestBody.analysisType) {
+      // Análise em grupo (TopCreativesList)
+      console.log("📊 Roteando para handleGroupAnalysis");
+      return await handleGroupAnalysis(requestBody);
+    } else if (requestBody.ad_name) {
+      // Análise individual (MetaAdsGrid) - mais específico
+      console.log("🎯 Roteando para handleIndividualAnalysis");
+      return await handleIndividualAnalysis(requestBody);
+    } else {
+      // Erro: tipo desconhecido
+      console.error("❌ Tipo de análise desconhecido:", Object.keys(requestBody));
+      throw new Error('Tipo de análise não reconhecido. Forneça "creatives + analysisType" ou "ad_name"');
+    }
+  } catch (error) {
+    console.error("❌ Erro na função analyze-creative:", error);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Erro desconhecido na análise",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+});
+
+// ============================================================================
+// ANÁLISE INDIVIDUAL
+// ============================================================================
+async function handleIndividualAnalysis(requestBody: any) {
+  const {
+    ad_name,
+    campaign_name,
+    metrics,
+    image_url: imageUrl,
+    video_url: videoUrl,
+    all_ads_metrics: allAdsMetrics,
+    selected_metrics: selectedMetrics,
+    competitor_keyword: competitorKeyword,
+  } = requestBody;
+
+  console.log("🔍 Análise individual iniciada - Modo dual: Performance + Market Trends");
+
+  const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) {
+    throw new Error("GOOGLE_GEMINI_API_KEY não encontrada");
+  }
+
+  // Inicializar Supabase
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Calcular performance vs média
+  const performanceComparison: Record<string, { current: number; average: number; percentile: number }> = {};
+
+  if (allAdsMetrics && allAdsMetrics.length > 0 && selectedMetrics && selectedMetrics.length > 0) {
+    selectedMetrics.forEach((metricKey: string) => {
+      const validValues = allAdsMetrics
+        .map((ad: any) => Number(ad.metrics?.[metricKey] || 0))
+        .filter((v: number) => !isNaN(v) && v > 0);
+
+      if (validValues.length > 0) {
+        const sum = validValues.reduce((acc: number, val: number) => acc + val, 0);
+        const avg = sum / validValues.length;
+
+        const currentValue = Number(metrics?.[metricKey] || 0);
+        const percentile = (currentValue / avg) * 100;
+
+        performanceComparison[metricKey] = {
+          current: currentValue,
+          average: avg,
+          percentile: Math.round(percentile),
+        };
+      }
+    });
+  }
+
+  // Performance geral
+  const overallPerformance =
+    Object.values(performanceComparison).length > 0
+      ? Object.values(performanceComparison).reduce((acc, val) => acc + val.percentile, 0) /
+        Object.values(performanceComparison).length
+      : 100;
+
+  console.log(`🎯 Performance geral: ${overallPerformance.toFixed(1)}% da média`);
+
+  // Carregar TODOS os competidores se keyword fornecido
+  let allCompetitors: any[] = [];
+
+  if (competitorKeyword) {
+    console.log(`🔍 Carregando TODOS os competidores para keyword: "${competitorKeyword}"`);
+
+    const { data: competitorData, error: competitorError } = await supabase
+      .from("competitor_ads_cache")
+      .select("*")
+      .ilike("search_keyword", competitorKeyword)
+      .eq("is_active", true)
+      .order("scraped_at", { ascending: false });
+
+    if (competitorError) {
+      console.error("❌ Erro ao carregar competidores:", competitorError);
+    } else {
+      allCompetitors = competitorData || [];
+      console.log(`✅ ${allCompetitors.length} anúncios competitivos carregados`);
+
+      // DEBUG: Mostrar estrutura do primeiro competidor
+      if (allCompetitors.length > 0) {
+        console.log("📝 Estrutura do primeiro competidor:", {
+          page_name: allCompetitors[0].page_name,
+          has_image_urls: !!allCompetitors[0].image_urls,
+          image_urls_count: allCompetitors[0].image_urls?.length || 0,
+          has_video_urls: !!allCompetitors[0].video_urls,
+          video_urls_count: allCompetitors[0].video_urls?.length || 0,
+          ad_format: allCompetitors[0].ad_format,
+          search_keyword: allCompetitors[0].search_keyword,
+        });
+      } else {
+        console.warn("⚠️ NENHUM competidor encontrado. Possíveis causas:");
+        console.warn(`   - Keyword "${competitorKeyword}" não existe na tabela`);
+        console.warn(`   - Campo is_active = false para todos`);
+        console.warn(`   - Tabela competitor_ads_cache está vazia`);
+      }
+    }
+  }
+
+  // ANÁLISE 1: Performance Criativa (SEMPRE executa)
+  console.log("📊 Gerando análise de performance...");
+  const performanceAnalysis = await generatePerformanceAnalysis({
+    ad_name,
+    campaign_name,
+    metrics,
+    imageUrl,
+    videoUrl,
+    allAdsMetrics,
+    selectedMetrics,
+    performanceComparison,
+    overallPerformance,
+    GEMINI_API_KEY,
+  });
+
+  // ANÁLISE 2: Tendências de Mercado (SOMENTE se competidores >= 10)
+  let marketTrendsAnalysis = null;
+  if (competitorKeyword && allCompetitors.length >= 10) {
+    console.log("📊 Gerando análise de tendências de mercado...");
+    marketTrendsAnalysis = await generateMarketTrendsAnalysis({
+      competitorKeyword,
+      allCompetitors,
+      GEMINI_API_KEY,
+    });
+  } else if (competitorKeyword && allCompetitors.length < 10) {
+    console.log(`⚠️ Apenas ${allCompetitors.length} competidores - mínimo de 10 necessário para análise de mercado`);
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      performance_analysis: performanceAnalysis,
+      market_trends_analysis: marketTrendsAnalysis,
+      metadata: {
+        model: "gemini-2.0-flash-exp",
+        performance_level:
+          overallPerformance >= 110 ? "excellent" : overallPerformance >= 90 ? "good" : "needs_improvement",
+        has_market_analysis: !!marketTrendsAnalysis,
+        competitors_analyzed: allCompetitors.length,
+        has_video_analysis: !!videoUrl,
+        has_image_analysis: !!imageUrl,
+      },
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+}
+
+// ============================================================================
+// ANÁLISE DE PERFORMANCE (Primeiro Prompt)
+// ============================================================================
+async function generatePerformanceAnalysis(params: {
+  ad_name: string;
+  campaign_name: string;
+  metrics: any;
+  imageUrl?: string;
+  videoUrl?: string;
+  allAdsMetrics: any[];
+  selectedMetrics: string[];
+  performanceComparison: Record<string, any>;
+  overallPerformance: number;
+  GEMINI_API_KEY: string;
+}): Promise<string> {
+  const systemPrompt = `Você é um analista de performance criativa. Analise este anúncio com base em dados e contexto, seguindo rigorosamente:
+
+## Análise do Anúncio
+
+**1. Interpretação de Métricas (conectando dados ao design)**
+- Explique o que os números revelam sobre o comportamento do usuário
+- Relacione CTR/CPC/ROAS aos elementos visuais, copy e CTA específicos
+- Evite afirmações genéricas; sempre cite o "porquê" mensurável
+
+**2. Fatores Visuais & Copy (análise causal)**
+Avalie:
+- Hierarquia visual (o que salta aos olhos primeiro?)
+- Contraste e legibilidade (cor de fundo vs. texto/CTA)
+- Posição e clareza do CTA (comprimento, ação, urgência)
+- Presença de elementos humanos, logos, números (impacto de credibilidade)
+- Tom de linguagem (urgência, curiosidade, benefício, etc.)
+- Adequação ao formato (vídeo vs. imagem) e plataforma
+
+**3. Comparação com Grupo (quando aplicável)**
+- Se performance ≤ média: cite 1 anúncio melhor do grupo e explique a diferença específica (ex: "CTA mais curto em 3 palavras vs. 8 palavras aqui")
+- Se performance > média: destaque 2-3 diferenciais que justificam o resultado
+
+---
+Seja objetivo. Evite genéricos. Priorize análise sobre descrição.Evite usar asteríscos`;
+
+  const userPrompt = `Analise este criativo:
+
+**CRIATIVO ANALISADO:**
+- Nome: ${params.ad_name}
+- Campanha: ${params.campaign_name}
+- Performance: ${params.overallPerformance.toFixed(1)}% da média
+
+**MÉTRICAS ATUAIS:**
+${Object.entries(params.metrics as Record<string, any>)
+  .map(([key, value]) => {
+    const comparison = params.performanceComparison[key];
+    const status = comparison
+      ? `(${comparison.percentile}% da média - ${comparison.percentile >= 90 ? "✅" : "🔴"})`
+      : "";
+    return `- ${key}: ${typeof value === "number" ? value.toFixed(2) : value} ${status}`;
+  })
+  .join("\n")}
+
+**ANÚNCIOS DO GRUPO (para comparação):**
+${params.allAdsMetrics
+  .slice(0, 5)
+  .map((ad) => `- ${ad.ad_name}: CTR ${ad.metrics?.ctr?.toFixed(2)}%, CPC R$${ad.metrics?.cpc?.toFixed(2)}`)
+  .join("\n")}`;
+
+  // Preparar conteúdo para Gemini API
+  const contentParts: any[] = [{ text: userPrompt }];
+
+  if (params.imageUrl && params.imageUrl.trim() !== "" && !isVideoUrl(params.imageUrl)) {
+    try {
+      const { uri, mimeType } = await uploadImageToGemini(params.imageUrl, params.GEMINI_API_KEY);
+      contentParts.push({ fileData: { mimeType, fileUri: uri } });
+      console.log(`📷 Imagem anexada para análise: ${uri}`);
+    } catch (error) {
+      console.warn("⚠️ Análise sem imagem:", error);
+    }
+  }
+
+  if (params.videoUrl && params.videoUrl.trim() !== "") {
+    try {
+      const geminiVideoUri = await uploadVideoToGemini(params.videoUrl, params.GEMINI_API_KEY);
+      contentParts.push({ fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri } });
+      console.log(`🎥 Vídeo anexado para análise: ${geminiVideoUri}`);
+    } catch (error) {
+      console.warn("⚠️ Análise sem vídeo:", error);
+    }
+  }
+
+  const geminiResponse = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": params.GEMINI_API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: contentParts }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+      }),
+    },
+  );
+
+  if (!geminiResponse.ok) {
+    const errorText = await geminiResponse.text();
+    throw new Error(`Gemini error: ${geminiResponse.status} - ${errorText}`);
+  }
+
+  const geminiData = await geminiResponse.json();
+  return geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+// ============================================================================
+// ANÁLISE DE TENDÊNCIAS DE MERCADO (Segundo Prompt)
+// ============================================================================
+async function generateMarketTrendsAnalysis(params: {
+  competitorKeyword: string;
+  allCompetitors: any[];
+  GEMINI_API_KEY: string;
+}): Promise<string> {
+  const systemPrompt = `Você é um analista de tendências criativas. Analise os criativos do mercado fornecidos (TEXTO + IMAGENS + VÍDEOS) e estruture assim:
+
+## Análise de Tenências do Mercado
+
+**1. Padrões Visuais (ANALISE AS IMAGENS E VÍDEOS FORNECIDOS)**
+- Paletas dominantes (cite 2-3 combinações e frequência REAL observada)
+- Elementos estruturais recorrentes (botões, posição de CTA, molduras, presença humana)
+- Formatos mais comuns (% vídeo vs. imagem estática; dimensões)
+- Tipografia (tamanho relativo, peso, efeitos) - BASEADO NAS IMAGENS
+
+**2. Copywriting & Tom (ANALISE O TEXTO DOS ANÚNCIOS)**
+- Tipo de apelo dominante: [Urgência | Aspiracional | Técnico | Social Proof | FOMO]
+- Frases-chave mais frequentes (cite 3-5 exemplos REAIS encontrados)
+- Comprimento médio de CTA (palavras)
+- Uso de números, símbolos, pontuação (ênfase)
+
+**3. Estrutura Visual (análise construtiva das IMAGENS/VÍDEOS)**
+- Hierarquia visual: onde o olho pousa primeiro? (BASEADO NAS IMAGENS)
+- Presença de: pessoas (%) | logos (%) | movimento | contraste alto (%)
+- Densidade de informação: [Mínima | Moderada | Alta]
+- Evite usar asteríscos 
+
+---
+⚠️ CRÍTICO: Cite dados e exemplos específicos DAS IMAGENS E VÍDEOS fornecidos. Evite genéricos. NÃO invente padrões não observados.`;
+
+  // Criar prompt estruturado com marcadores de posição para mídia
+  const competitorDetailsWithMedia: string[] = [];
+  let imageIndex = 1;
+  let videoIndex = 1;
+
+  for (let i = 0; i < params.allCompetitors.length; i++) {
+    const ad = params.allCompetitors[i];
+    let details = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Concorrente ${i + 1}: ${ad.page_name}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    // Indicar se há mídia visual
+    if (i < 30 && ad.image_urls && ad.image_urls.length > 0) {
+      details += `\n🖼️ [IMAGEM VISUAL #${imageIndex} ANEXADA ABAIXO]`;
+      imageIndex++;
+    }
+    if (i < 5 && ad.video_urls && ad.video_urls.length > 0) {
+      details += `\n🎥 [VÍDEO #${videoIndex} ANEXADO ABAIXO]`;
+      videoIndex++;
+    }
+
+    details += `
+- Copy: ${ad.ad_copy?.substring(0, 200) || "N/A"}
+- CTA: ${ad.cta_text || "N/A"}
+- Formato: ${ad.ad_format || "N/A"}
+- Ativo desde: ${ad.started_running_date || "N/A"}
+`;
+
+    competitorDetailsWithMedia.push(details);
+  }
+
+  const userPrompt = `Analise ${params.allCompetitors.length} criativos do mercado para a keyword "${params.competitorKeyword}":
+
+**DADOS COMPLETOS DE ${params.allCompetitors.length} CONCORRENTES REAIS:**
+${competitorDetailsWithMedia.join("\n")}
+
+**INSTRUÇÕES:**
+1. Analise TODOS os ${params.allCompetitors.length} anúncios fornecidos
+2. Use as IMAGENS e VÍDEOS anexados para análise visual detalhada
+3. Identifique padrões com frequência > 30%
+4. Use dados quantitativos em TODAS as observações
+5. NÃO invente dados - use APENAS o que foi fornecido
+6. Cite exemplos específicos (page_name dos concorrentes)
+7. Não cite o número do criativo do concorrente, isso é irrelevante para o usuário e poluí a análise, exemplo: Telemax(7, 9 e 11)
+
+**IMPORTANTE:** As imagens e vídeos estão anexados nesta mensagem. Analise TODOS os elementos visuais fornecidos.`;
+
+  // Upload de imagens dos competidores (limite 30)
+  const contentParts: any[] = [{ text: userPrompt }];
+  let successfulUploads = 0;
+  let failedUploads = 0;
+
+  console.log(`📸 Iniciando upload de imagens de ${Math.min(30, params.allCompetitors.length)} competidores...`);
+
+  for (const competitor of params.allCompetitors.slice(0, 30)) {
+    if (competitor.image_urls && competitor.image_urls.length > 0) {
+      const imageUrl = competitor.image_urls[0].original_image_url;
+      if (imageUrl && !isVideoUrl(imageUrl)) {
+        try {
+          const { uri, mimeType } = await uploadImageToGemini(imageUrl, params.GEMINI_API_KEY);
+          contentParts.push({
+            fileData: { mimeType, fileUri: uri },
+          });
+          successfulUploads++;
+          console.log(
+            `✅ [${successfulUploads}/${Math.min(30, params.allCompetitors.length)}] Imagem do competidor "${competitor.page_name}" enviada: ${uri.substring(0, 60)}...`,
+          );
+        } catch (error) {
+          failedUploads++;
+          console.warn(
+            `❌ [${failedUploads} falhas] Erro ao processar imagem de "${competitor.page_name}":`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+    }
+  }
+
+  console.log(`📊 Resumo do upload de imagens:
+  ✅ Sucesso: ${successfulUploads}
+  ❌ Falhas: ${failedUploads}
+  📦 Total de competidores: ${params.allCompetitors.length}
+  🎯 Imagens enviadas para análise: ${successfulUploads}`);
+
+  // Upload de vídeos dos competidores (limite 5)
+  let successfulVideoUploads = 0;
+  let failedVideoUploads = 0;
+
+  console.log(`🎥 Iniciando upload de vídeos de competidores...`);
+
+  for (const competitor of params.allCompetitors.slice(0, 5)) {
+    if (competitor.video_urls && competitor.video_urls.length > 0) {
+      const videoUrl = competitor.video_urls[0]; // Pegar primeiro vídeo
+      if (videoUrl && videoUrl.trim() !== "") {
+        try {
+          const geminiVideoUri = await uploadVideoToGemini(videoUrl, params.GEMINI_API_KEY);
+          contentParts.push({
+            fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri },
+          });
+          successfulVideoUploads++;
+          console.log(
+            `✅ [${successfulVideoUploads}/5] Vídeo do competidor "${competitor.page_name}" enviado: ${geminiVideoUri.substring(0, 60)}...`,
+          );
+        } catch (error) {
+          failedVideoUploads++;
+          console.warn(
+            `❌ Erro ao processar vídeo de "${competitor.page_name}":`,
+            error instanceof Error ? error.message : error,
+          );
+        }
+      }
+    }
+  }
+
+  console.log(`📊 Resumo do upload de vídeos:
+  ✅ Sucesso: ${successfulVideoUploads}
+  ❌ Falhas: ${failedVideoUploads}
+  🎯 Vídeos enviados para análise: ${successfulVideoUploads}`);
+
+  const geminiResponse = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": params.GEMINI_API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: contentParts }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+      }),
+    },
+  );
+
+  if (!geminiResponse.ok) {
+    const errorText = await geminiResponse.text();
+    throw new Error(`Gemini error: ${geminiResponse.status} - ${errorText}`);
+  }
+
+  const geminiData = await geminiResponse.json();
+  let analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  // Validar se análise menciona dados visuais
+  if (successfulUploads > 0) {
+    const hasVisualAnalysis = /paleta|cor|tipografia|hierarquia visual|elemento visual/i.test(analysisText);
+    if (!hasVisualAnalysis) {
+      console.warn("⚠️ Análise não menciona elementos visuais apesar de imagens terem sido enviadas!");
+    }
+  }
+
+  console.log(`✅ Análise de mercado gerada com ${analysisText.length} caracteres`);
+
+  return analysisText;
+}
+
+// ============================================================================
+// CÓDIGO LEGADO REMOVIDO
+// ============================================================================
+// A lógica antiga foi refatorada e movida para:
+// - generatePerformanceAnalysis() (análise de performance individual)
+// - generateMarketTrendsAnalysis() (análise de tendências de mercado)
+
+// ============================================================================
+// ANÁLISE DE GRUPO
+// ============================================================================
+async function handleGroupAnalysis(requestBody: any) {
+  const {
+    creatives,
+    analysisType,
+    primaryMetric,
+    secondaryMetric,
+    competitor_keyword: competitorKeyword,
+  } = requestBody;
+
+  console.log(`🔍 Análise de grupo iniciada: ${analysisType}`);
+  console.log(`📊 ${creatives.length} criativos para análise`);
+
+  const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) {
+    throw new Error("GOOGLE_GEMINI_API_KEY não encontrada");
+  }
+
+  // Inicializar Supabase
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  // Para worst performers, carregar TODOS os competidores
+  let allCompetitors: any[] = [];
+
+  if (analysisType === "worst" && competitorKeyword) {
+    console.log(`🔍 Carregando competidores para análise de worst performers...`);
+
+    const { data: competitorData, error: competitorError } = await supabase
+      .from("competitor_ads_cache")
+      .select("*")
+      .eq("search_keyword", competitorKeyword)
+      .eq("is_active", true)
+      .order("scraped_at", { ascending: false });
+
+    if (competitorError) {
+      console.error("❌ Erro ao carregar competidores:", competitorError);
+    } else {
+      allCompetitors = competitorData || [];
+      console.log(`✅ ${allCompetitors.length} anúncios competitivos carregados para comparação`);
+    }
+  }
+
+  const dataValidationRules = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 REGRAS ABSOLUTAS DE VALIDAÇÃO DE DADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ PERMITIDO:
+- Descrever elementos presentes nos criativos fornecidos
+- Calcular frequências baseadas nos dados reais
+- Citar page_name de concorrentes quando fornecidos
+
+❌ PROIBIDO:
+- Inventar padrões não observados
+- Especular sem base nos dados
+- Citar concorrentes não fornecidos
+`;
+
+  let systemPrompt = "";
+  let userPrompt = "";
+
+  if (analysisType === "top") {
+    // TOP PERFORMERS: Identificar padrões internos de sucesso
+    systemPrompt = `${dataValidationRules}
+
+Você é um especialista em análise de criativos de anúncios digitais.
+
+🎯 OBJETIVO:
+Identificar PADRÕES COMUNS entre os ${creatives.length} criativos de MELHOR performance.
+
+📋 TAREFAS:
+1. Elementos visuais presentes em TODOS ou MAIORIA
+2. Características de copy compartilhadas
+3. Estrutura criativa similar
+4. Métricas em comum (alto CTR + baixo CPC, etc)
+
+EXPLIQUE:
+- POR QUE esses elementos geram resultados
+- Como replicar esses sucessos
+- Quais princípios estão sendo aplicados
+
+🚨 IMPORTANTE:
+- NÃO mencione concorrentes
+- Foque nos padrões INTERNOS de sucesso
+- Seja específico sobre elementos observados
+`;
+
+    const creativesDetails = creatives
+      .map(
+        (c: any, i: number) => `
+Criativo ${i + 1}: ${c.ad_name}
+- Campanha: ${c.campaign_name}
+- CTR: ${c.ctr?.toFixed(2)}%
+- CPC: R$ ${c.cpc?.toFixed(2)}
+- ROAS: ${c.roas?.toFixed(2)}x
+- Conversões: ${c.conversions}
+${c.image_url ? `- Imagem: ${c.image_url}` : ""}
+${c.video_url ? `- Vídeo: ${c.video_url}` : ""}
+`,
+      )
+      .join("\n");
+
+    userPrompt = `Analise ${creatives.length} criativos de MELHOR performance:
+
+**CRIATIVOS:**
+${creativesDetails}
+
+**MÉTRICAS ANALISADAS:**
+- Primária: ${primaryMetric}
+- Secundária: ${secondaryMetric}
+
+**INSTRUÇÕES:**
+1. Identifique elementos comuns entre os criativos
+2. Explique por que esses elementos geram sucesso
+3. Recomende como replicar esses padrões
+4. Baseie-se APENAS nos ${creatives.length} criativos fornecidos
+`;
+  } else {
+    // WORST PERFORMERS: Comparar com mercado
+    systemPrompt = `${dataValidationRules}
+
+Você é um especialista em análise de criativos com foco em INTELIGÊNCIA DE MERCADO.
+
+🎯 OBJETIVO:
+Identificar O QUE FALTA nos ${creatives.length} criativos de BAIXA performance comparado aos ${allCompetitors.length} concorrentes do mercado.
+
+📋 TAREFAS:
+1. Elementos presentes nos concorrentes mas AUSENTES nos criativos analisados
+2. Diferenças de estrutura, cores, copy, formato
+3. Gaps de mercado (o que todos os concorrentes fazem mas você não)
+
+ANÁLISE QUANTITATIVA:
+- ${allCompetitors.length} concorrentes analisados
+- Padrões com frequência > 30% são TENDÊNCIAS
+- Citar números exatos em cada insight
+
+🚨 REGRAS:
+- Baseie-se APENAS nos dados fornecidos
+- Use dados quantitativos
+- Não precisa referênciar o número da imagem(ex: imagem 15-35 e imagem 14,17,20)
+- Cite page_name dos concorrentes
+`;
+
+    const creativesDetails = creatives
+      .map(
+        (c: any, i: number) => `
+Criativo ${i + 1}: ${c.ad_name}
+- CTR: ${c.ctr?.toFixed(2)}%
+- CPC: R$ ${c.cpc?.toFixed(2)}
+- ROAS: ${c.roas?.toFixed(2)}x
+${c.image_url ? `- Imagem: ${c.image_url}` : ""}
+`,
+      )
+      .join("\n");
+
+    const competitorDetails = allCompetitors
+      .slice(0, 50)
+      .map(
+        (ad, i) => `
+Concorrente ${i + 1}: ${ad.page_name}
+- Copy: ${ad.ad_copy?.substring(0, 150) || "N/A"}
+- CTA: ${ad.cta_text || "N/A"}
+- Formato: ${ad.ad_format || "N/A"}
+`,
+      )
+      .join("\n");
+
+    userPrompt = `Analise ${creatives.length} criativos de BAIXA performance vs ${allCompetitors.length} concorrentes:
+
+**CRIATIVOS ANALISADOS (baixa performance):**
+${creativesDetails}
+
+**${allCompetitors.length} CONCORRENTES DO MERCADO:**
+${competitorDetails}
+
+**INSTRUÇÕES:**
+1. Compare criativos com concorrentes
+2. Identifique gaps (o que falta)
+3. Use dados quantitativos
+4. Recomende melhorias específicas
+`;
+  }
+
+  // Preparar mídia para Gemini
+  const contentParts: any[] = [{ text: userPrompt }];
+
+  // Adicionar imagens/vídeos dos criativos
+  for (const creative of creatives.slice(0, 10)) {
+    // Limitar a 10 para não sobrecarregar
+    if (creative.image_url && creative.image_url.trim() !== "" && !isVideoUrl(creative.image_url)) {
+      // Para imagens, fazer upload para Gemini File API
+      try {
+        const { uri, mimeType } = await uploadImageToGemini(creative.image_url, GEMINI_API_KEY);
+        contentParts.push({
+          fileData: {
+            mimeType,
+            fileUri: uri,
+          },
+        });
+        console.log(`📷 Imagem ${creative.ad_name} enviada: ${uri}`);
+      } catch (error) {
+        console.warn(
+          `⚠️ Não foi possível processar imagem de ${creative.ad_name}: ${error instanceof Error ? error.message : "erro"}`,
+        );
+        // Continua com os outros criativos
+      }
+    }
+    if (creative.video_url && creative.video_url.trim() !== "") {
+      // Para vídeos, fazer upload para Gemini File API
+      try {
+        const geminiVideoUri = await uploadVideoToGemini(creative.video_url, GEMINI_API_KEY);
+        contentParts.push({
+          fileData: {
+            mimeType: "video/mp4",
+            fileUri: geminiVideoUri,
+          },
+        });
+        console.log(`🎥 Vídeo ${creative.ad_name} enviado: ${geminiVideoUri}`);
+      } catch (error) {
+        console.warn(
+          `⚠️ Não foi possível processar vídeo de ${creative.ad_name}: ${error instanceof Error ? error.message : "erro"}`,
+        );
+        // Continua com os outros criativos
+      }
+    }
+  }
+
+  // Chamar Gemini
+  const geminiPayload = {
+    contents: [
+      {
+        role: "user",
+        parts: contentParts,
+      },
+    ],
+    systemInstruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 4096,
+    },
+  };
+
+  console.log("🤖 Chamando Gemini 2.5 Flash para análise de grupo...");
+
+  const geminiResponse = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY,
+      },
+      body: JSON.stringify(geminiPayload),
+    },
+  );
+
+  if (!geminiResponse.ok) {
+    const errorText = await geminiResponse.text();
+    let errorMessage = `Erro ${geminiResponse.status}`;
+
+    try {
+      const errorJson = JSON.parse(errorText);
+      errorMessage = errorJson.error?.message || errorMessage;
+    } catch {
+      errorMessage = errorText.substring(0, 200);
+    }
+
+    console.error("❌ Erro Gemini API:", geminiResponse.status, errorText);
+    throw new Error(`Gemini API error: ${geminiResponse.status} - ${errorMessage}`);
+  }
+
+  const geminiData = await geminiResponse.json();
+  const analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+  console.log("✅ Análise de grupo gerada com sucesso");
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      performance_analysis: analysisText, // ✅ Novo formato consistente
+      market_trends_analysis: null, // ✅ Adicionar campo
+      metadata: {
+        model: "gemini-2.0-flash-exp",
+        analysis_type: analysisType,
+        creatives_count: creatives.length,
+        competitors_analyzed: allCompetitors.length,
+        primary_metric: primaryMetric,
+        secondary_metric: secondaryMetric,
+        has_market_analysis: false,
+        is_group_analysis: true, // ✅ Indicar que é análise de grupo
+      },
+    }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
+}
+
+// ============================================================================
+// VALIDAÇÃO DE ANÁLISE
+// ============================================================================
+function validateAnalysis(analysis: string, competitorData: any[]): boolean {
+  const analysisLower = analysis.toLowerCase();
+
+  // Padrões suspeitos de dados fictícios
+  const suspiciousPatterns = [
+    /nike|adidas|coca-cola|apple|samsung|facebook|instagram(?! ads)/i,
+    /segundo pesquisas|estudos mostram|análises indicam/i,
+    /baseado em tendências globais|padrões do setor/i,
+    /de acordo com especialistas|segundo dados de mercado/i,
+  ];
+
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(analysis)) {
+      console.warn("⚠️ Análise contém padrões suspeitos:", pattern);
+      return false;
+    }
+  }
+
+  // Se mencionou concorrentes, verificar se são reais
+  if (competitorData.length > 0) {
+    const providedPageNames = competitorData.map((c) => c.page_name?.toLowerCase()).filter(Boolean);
+
+    // Verificar se análise menciona concorrentes não fornecidos
+    // (isso seria mais complexo, por agora apenas log)
+    console.log("✅ Validação básica passou");
+  }
+
+  return true;
+}

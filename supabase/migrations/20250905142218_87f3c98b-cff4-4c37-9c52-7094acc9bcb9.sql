@@ -1,0 +1,22 @@
+-- Remover todas as políticas RLS existentes que causam recursão infinita
+DROP POLICY IF EXISTS "Admins can manage authorized emails" ON public.authorized_emails;
+DROP POLICY IF EXISTS "Users can create comments" ON public.comments;
+DROP POLICY IF EXISTS "Users can view comments from their company materials" ON public.comments;
+DROP POLICY IF EXISTS "Admins can manage companies" ON public.companies;
+DROP POLICY IF EXISTS "Users can view their company" ON public.companies;
+DROP POLICY IF EXISTS "Users can create materials" ON public.materials;
+DROP POLICY IF EXISTS "Users can delete materials they created" ON public.materials;
+DROP POLICY IF EXISTS "Users can update materials from their company" ON public.materials;
+DROP POLICY IF EXISTS "Users can view materials from their company" ON public.materials;
+DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "System can insert profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view profiles from their company" ON public.profiles;
+DROP POLICY IF EXISTS "Users can manage project participants" ON public.project_participants;
+DROP POLICY IF EXISTS "Users can view project participants" ON public.project_participants;
+DROP POLICY IF EXISTS "Project creators can delete projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can create projects" ON public.projects;
+DROP POLICY IF EXISTS "Users can update projects from their company" ON public.projects;
+DROP POLICY IF EXISTS "Users can view projects from their company" ON public.projects;
