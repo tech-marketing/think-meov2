@@ -176,11 +176,11 @@ const BriefingEditor = () => {
       // Recarregar o briefing para mostrar o editor
       loadBriefing();
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro na geração:', error);
       toast({
         title: "Erro na geração",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: error.message || error.details || (typeof error === 'object' ? JSON.stringify(error) : "Erro desconhecido"),
         variant: "destructive"
       });
       // Opcional: Mudar status para 'error' ou permitir tentar novamente
