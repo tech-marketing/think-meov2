@@ -79,8 +79,9 @@ export const BriefingEditorLayout = ({
     );
   }
 
-  // Se é uma imagem estática e tem URL, renderizar a imagem
-  if ((materialType === 'image' || fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i)) && fileUrl) {
+  // Se tem file_url e é uma imagem (ou tipo wireframe/static/image), renderizar a imagem
+  // Isso cobre materiais gerados por workflow que podem ter type='wireframe' mas file_url com imagem
+  if (fileUrl && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i))) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
         <div className="max-w-4xl w-full flex flex-col gap-4">
@@ -104,6 +105,7 @@ export const BriefingEditorLayout = ({
     );
   }
 
+  // Fallback para canvas editor (materiais criados manualmente)
   return (
     <div className="h-[calc(100vh-200px)]">
       {useCanvas ? (
