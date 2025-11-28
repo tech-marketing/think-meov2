@@ -114,17 +114,8 @@ const Materials = () => {
           }
           // Verificar extensões de PDF
           else if (fileName.includes('pdf') || fileUrl.includes('.pdf') ||
-            fileName.includes('.pdf') || mimeType.includes('pdf')) {
+            mimeType.includes('pdf')) {
             materialType = 'pdf';
-          }
-          // Verificar se é carrossel (JSON array no file_url)
-          else if (fileUrl.trim().startsWith('[') && fileUrl.trim().endsWith(']')) {
-            try {
-              JSON.parse(material.file_url);
-              materialType = 'carousel';
-            } catch (e) {
-              // Not a valid JSON, ignore
-            }
           }
         }
 
@@ -150,12 +141,7 @@ const Materials = () => {
         };
       });
 
-      // Deduplicate materials by ID to prevent duplicates in the UI
-      const uniqueMaterials = processedMaterials.filter((material, index, self) =>
-        index === self.findIndex((t) => t.id === material.id)
-      );
-
-      setMaterials(uniqueMaterials);
+      setMaterials(processedMaterials);
 
       // Extrair lista única de empresas
       const uniqueCompanies = Array.from(new Set(

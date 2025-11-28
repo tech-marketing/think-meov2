@@ -103,20 +103,6 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
     // Default Thumbnail / Image
     if (material.thumbnail || material.file_url) {
       const isVideo = material.type === 'video' || (material.file_url && /\.(mp4|mov|webm|avi)/i.test(material.file_url));
-
-      // Check if file_url is a JSON array (carousel) and we need to extract the first image
-      let displayUrl = material.thumbnail || material.file_url;
-      if (!material.thumbnail && material.file_url && material.file_url.trim().startsWith('[') && material.file_url.trim().endsWith(']')) {
-        try {
-          const parsed = JSON.parse(material.file_url);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            displayUrl = parsed[0];
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-
       // If it's a video and we don't have a separate thumbnail (or thumbnail is the video url), 
       // render a video element to show the first frame
       if (isVideo && (!material.thumbnail || material.thumbnail === material.file_url)) {
@@ -143,16 +129,9 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
       return (
         <div className="relative w-full h-full">
           <img
-            src={displayUrl}
+            src={material.thumbnail || material.file_url}
             alt={material.name}
             className="w-full h-full object-cover"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.parentElement?.classList.add('bg-blue-50', 'flex', 'items-center', 'justify-center');
-              const icon = document.createElement('div');
-              icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image-off h-12 w-12 text-primary/40"><path d="m2 2 20 20"/><path d="M8.33 4h7.34a2 2 0 0 1 2 2v6.67"/><path d="M15.66 15.66 13.46 13.46a2 2 0 0 0-2.7 0L6 18.22"/><path d="M22 22 2 2"/><path d="M4 8.33V18a2 2 0 0 0 2 2h9.67"/></svg>';
-              e.currentTarget.parentElement?.appendChild(icon);
-            }}
           />
           {material.type === 'video' && !isHovered && (
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
