@@ -41,7 +41,13 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
         if (material.file_url.startsWith('[') && material.file_url.endsWith(']')) {
           const parsed = JSON.parse(material.file_url);
           if (Array.isArray(parsed)) {
-            setCarouselImages(parsed);
+            // Mapear para extrair apenas as URLs, lidando com objetos ou strings
+            const images = parsed.map((item: any) => {
+              if (typeof item === 'string') return item;
+              return item.url || item; // Tenta pegar .url, senão usa o item (fallback)
+            }).filter(Boolean);
+
+            setCarouselImages(images);
             return;
           }
         }
@@ -60,7 +66,7 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
     if (isHovered && material.type === 'carousel' && carouselImages.length > 1) {
       interval = setInterval(() => {
         setCarouselIndex((prev) => (prev + 1) % carouselImages.length);
-      }, 1000); // Change every 1 second
+      }, 1500); // Change every 1.5 second for better viewing
     } else {
       setCarouselIndex(0);
     }
