@@ -126,10 +126,28 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
         );
       }
 
+      // Handle Carousel Default View (show first image)
+      let displayImage = material.thumbnail || material.file_url;
+      if (material.type === 'carousel' && carouselImages.length > 0) {
+        displayImage = carouselImages[0];
+      } else if (material.type === 'carousel' && material.file_url) {
+        // Try to parse if it's a JSON string and we haven't processed it yet
+        try {
+          if (material.file_url.startsWith('[') && material.file_url.endsWith(']')) {
+            const parsed = JSON.parse(material.file_url);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              displayImage = parsed[0].url || parsed[0]; // Handle object with url prop or string
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       return (
         <div className="relative w-full h-full">
           <img
-            src={material.thumbnail || material.file_url}
+            src={displayImage}
             alt={material.name}
             className="w-full h-full object-cover"
           />
@@ -157,52 +175,56 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
   };
 
   return (
-    <Tilt
+    <div
       className="h-full"
-      rotationFactor={10}
-      springOptions={{ stiffness: 200, damping: 20 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <Card
-        className="cursor-pointer hover:shadow-xl transition-all duration-300 group overflow-hidden h-full border-transparent hover:border-primary/20"
-        onClick={onClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+      <Tilt
+        className="h-full"
+        rotationFactor={10}
+        springOptions={{ stiffness: 200, damping: 20 }}
       >
-        <CardContent className="p-0 flex flex-col h-full">
-          {/* Thumbnail / Preview Area */}
-          <div className="relative aspect-video overflow-hidden bg-muted">
-            {renderPreview()}
-          </div>
-
-          {/* Content */}
-          <div className="p-4 space-y-2 flex-1 flex flex-col">
-            <div className="flex justify-between items-start gap-2">
-              <h4 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                {material.name}
-              </h4>
+        <Card
+          className="cursor-pointer hover:shadow-xl transition-all duration-300 group overflow-hidden h-full border-transparent hover:border-primary/20"
+          onClick={onClick}
+        >
+          <CardContent className="p-0 flex flex-col h-full">
+            {/* Thumbnail / Preview Area */}
+            <div className="relative aspect-video overflow-hidden bg-muted">
+              {renderPreview()}
             </div>
 
-            <div className="mt-auto space-y-2">
-              {material.project && (
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  {material.project}
-                </p>
-              )}
+            {/* Content */}
+            <div className="p-4 space-y-2 flex-1 flex flex-col">
+              <div className="flex justify-between items-start gap-2">
+                <h4 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                  {material.name}
+                </h4>
+              </div>
 
-              {material.company && (
-                <p className="text-xs text-muted-foreground uppercase font-medium tracking-wider">
-                  {material.company} • {new Date().getFullYear()}
-                </p>
-              )}
+              <div className="mt-auto space-y-2">
+                {material.project && (
+                  <p className="text-sm text-muted-foreground line-clamp-1">
+                    {material.project}
+                  </p>
+                )}
 
-              <div className="pt-2 flex items-center justify-between">
-                <StatusBadge status={material.status} isRunning={material.is_running} />
+                {material.company && (
+                  <p className="text-xs text-muted-foreground uppercase font-medium tracking-wider">
+                    {material.company} • {new Date().getFullYear()}
+                  </p>
+                )}
+
+                <div className="pt-2 flex items-center justify-between">
+                  <StatusBadge status={material.status} isRunning={material.is_running} />
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    </Tilt>
+          </CardContent>
+        </Card>
+      </Tilt>
+    </div>
   );
 };
 

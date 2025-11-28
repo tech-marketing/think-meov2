@@ -341,7 +341,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           .from("materials")
           .insert({
             name: materialName,
-            type: fileUrls[0].type, // Usar o tipo do primeiro arquivo (todos serão mostrados como carrossel via file_url JSON)
+            type: files.length > 1 ? 'carousel' : fileUrls[0].type, // Se tiver mais de 1 arquivo, é carrossel
             status: 'pending',
             project_id: selectedProject,
             created_by: profile.id,
