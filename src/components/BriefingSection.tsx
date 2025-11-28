@@ -22,7 +22,7 @@ interface BriefingMaterial {
   status: 'client_approval' | 'internal_approval' | 'pending' | 'approved' | 'needs_adjustment' | 'rejected';
   comments: number;
   caption?: string;
-
+  thumbnail?: string;
   briefing_approved_by_client?: boolean;
 }
 
@@ -72,7 +72,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
 
       const { data: briefingData, error } = await supabase
         .from('materials')
-        .select('id, name, type, status, caption, wireframe_data, briefing_approved_by_client')
+        .select('id, name, type, status, caption, wireframe_data, briefing_approved_by_client, file_url, thumbnail_url')
         .eq('project_id', projectId)
         .in('type', ['wireframe', 'carousel', 'video', 'image'])
         .eq('is_briefing', true)
@@ -88,7 +88,7 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
         status: briefing.status as BriefingMaterial['status'],
         comments: 0, // TODO: contar comentários
         caption: briefing.caption || undefined,
-
+        thumbnail: briefing.thumbnail_url || briefing.file_url,
       }));
 
       setBriefings(processedBriefings);
