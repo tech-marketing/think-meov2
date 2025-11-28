@@ -31,6 +31,8 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselImages, setCarouselImages] = useState<string[]>([]);
 
+  console.log('MaterialCard data:', { id: material.id, name: material.name, type: material.type, thumbnail: material.thumbnail, file_url: material.file_url });
+
   useEffect(() => {
     if (material.type === 'carousel' && material.file_url) {
       // Tentar parsear se for JSON, ou usar como array se possível, ou fallback para único
@@ -100,7 +102,7 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
 
     // Default Thumbnail / Image
     if (material.thumbnail || material.file_url) {
-      const isVideo = material.type === 'video';
+      const isVideo = material.type === 'video' || (material.file_url && /\.(mp4|mov|webm|avi)/i.test(material.file_url));
       // If it's a video and we don't have a separate thumbnail (or thumbnail is the video url), 
       // render a video element to show the first frame
       if (isVideo && (!material.thumbnail || material.thumbnail === material.file_url)) {

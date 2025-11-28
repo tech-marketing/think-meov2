@@ -27,6 +27,8 @@ interface Material {
   status: 'approved' | 'pending' | 'needs_adjustment' | 'rejected';
   comments: number;
   thumbnail?: string;
+  file_url?: string;
+  metadata?: any;
   project?: string;
   company?: string;
   is_running?: boolean;
@@ -70,6 +72,7 @@ const Materials = () => {
           file_url,
           thumbnail_url,
           is_running,
+          metadata,
           projects(
             name,
             companies(name)
@@ -95,9 +98,14 @@ const Materials = () => {
         if (materialType === 'image') {
           const fileName = material.name?.toLowerCase() || '';
           const fileUrl = material.file_url?.toLowerCase() || '';
+          const mimeType = material.metadata?.mimetype || material.metadata?.mime_type || '';
 
+          // Verificar mime type no metadata
+          if (mimeType.includes('video')) {
+            materialType = 'video';
+          }
           // Verificar extensões de vídeo
-          if (fileName.includes('video') ||
+          else if (fileName.includes('video') ||
             fileUrl.includes('.mp4') || fileUrl.includes('.mov') ||
             fileUrl.includes('.avi') || fileUrl.includes('.webm') ||
             fileName.includes('.mp4') || fileName.includes('.mov') ||
@@ -106,7 +114,7 @@ const Materials = () => {
           }
           // Verificar extensões de PDF
           else if (fileName.includes('pdf') || fileUrl.includes('.pdf') ||
-            fileName.includes('.pdf')) {
+            mimeType.includes('pdf')) {
             materialType = 'pdf';
           }
         }
