@@ -35,12 +35,30 @@ export const BriefingEditorLayout = ({
   fileUrl,
   caption
 }: BriefingEditorLayoutProps) => {
+  // Parse carousel images from file_url if it's a JSON array
+  let carouselSlides = wireframeData?.slides || [];
+  if (materialType === 'carousel' && fileUrl && !carouselSlides.length) {
+    try {
+      if (fileUrl.startsWith('[') && fileUrl.endsWith(']')) {
+        const parsedUrls = JSON.parse(fileUrl);
+        if (Array.isArray(parsedUrls)) {
+          carouselSlides = parsedUrls.map((item: any, index: number) => ({
+            imageUrl: typeof item === 'string' ? item : item.url,
+            index: index
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing carousel file_url:', e);
+    }
+  }
+
   // Se é um carrossel com slides, renderizar a galeria de imagens
-  if (materialType === 'carousel' && wireframeData?.slides && wireframeData.slides.length > 0) {
+  if (materialType === 'carousel' && carouselSlides.length > 0) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background">
         <CarouselGallery
-          slides={wireframeData.slides}
+          slides={carouselSlides}
           className="max-w-4xl w-full"
         />
       </div>
