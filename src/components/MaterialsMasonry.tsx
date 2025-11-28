@@ -103,6 +103,20 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
     // Default Thumbnail / Image
     if (material.thumbnail || material.file_url) {
       const isVideo = material.type === 'video' || (material.file_url && /\.(mp4|mov|webm|avi)/i.test(material.file_url));
+
+      // Check if file_url is a JSON array (carousel) and we need to extract the first image
+      let displayUrl = material.thumbnail || material.file_url;
+      if (!material.thumbnail && material.file_url && material.file_url.trim().startsWith('[') && material.file_url.trim().endsWith(']')) {
+        try {
+          const parsed = JSON.parse(material.file_url);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            displayUrl = parsed[0];
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       // If it's a video and we don't have a separate thumbnail (or thumbnail is the video url), 
       // render a video element to show the first frame
       if (isVideo && (!material.thumbnail || material.thumbnail === material.file_url)) {
@@ -129,7 +143,7 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
       return (
         <div className="relative w-full h-full">
           <img
-            src={material.thumbnail || material.file_url}
+            src={displayUrl}
             alt={material.name}
             className="w-full h-full object-cover"
           />

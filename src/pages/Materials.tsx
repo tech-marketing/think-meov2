@@ -114,8 +114,17 @@ const Materials = () => {
           }
           // Verificar extensões de PDF
           else if (fileName.includes('pdf') || fileUrl.includes('.pdf') ||
-            mimeType.includes('pdf')) {
+            fileName.includes('.pdf') || mimeType.includes('pdf')) {
             materialType = 'pdf';
+          }
+          // Verificar se é carrossel (JSON array no file_url)
+          else if (fileUrl.trim().startsWith('[') && fileUrl.trim().endsWith(']')) {
+            try {
+              JSON.parse(material.file_url);
+              materialType = 'carousel';
+            } catch (e) {
+              // Not a valid JSON, ignore
+            }
           }
         }
 
