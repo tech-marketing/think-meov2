@@ -150,7 +150,12 @@ const Materials = () => {
         };
       });
 
-      setMaterials(processedMaterials);
+      // Deduplicate materials by ID to prevent duplicates in the UI
+      const uniqueMaterials = processedMaterials.filter((material, index, self) =>
+        index === self.findIndex((t) => t.id === material.id)
+      );
+
+      setMaterials(uniqueMaterials);
 
       // Extrair lista única de empresas
       const uniqueCompanies = Array.from(new Set(
