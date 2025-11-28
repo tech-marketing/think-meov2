@@ -45,9 +45,9 @@ serve(async (req) => {
       .single();
 
     // Parse do corpo da requisição PRIMEIRO
-    const { 
+    const {
       adId,
-      accountId, 
+      accountId,
       projectId,
       creativeAnalysis,
       adName,
@@ -58,10 +58,10 @@ serve(async (req) => {
       targetFormat = 'static' // Formato do criativo: 'static', 'carousel', 'video'
     } = await req.json();
 
-    console.log('🔧 Dados recebidos:', { 
-      adId, 
+    console.log('🔧 Dados recebidos:', {
+      adId,
       accountId: accountId ? 'Present' : 'Missing',
-      projectId: projectId ? 'Present' : 'Missing', 
+      projectId: projectId ? 'Present' : 'Missing',
       creativeAnalysis: creativeAnalysis ? 'Present' : 'Missing',
       adName,
       materialCaption: materialCaption ? 'Present' : 'Missing',
@@ -69,19 +69,19 @@ serve(async (req) => {
       simpleOutput,
       targetFormat,
       userRole: profile?.role,
-      userCompanyId: profile?.company_id 
+      userCompanyId: profile?.company_id
     });
 
     // Log de dados competitivos
     console.log(`🏆 Dados competitivos recebidos: ${competitorAds?.length || 0} anúncios`);
-    
+
     // Coletar URLs das imagens dos concorrentes para análise visual E criar mapeamento URL -> page_name
     const competitorImages: string[] = [];
     const competitorImageMapping: Array<{ url: string; page_name: string }> = [];
-    
+
     if (competitorAds && competitorAds.length > 0) {
       console.log('✅ Análise competitiva ATIVA - briefing incluirá insights competitivos');
-      
+
       for (const ad of competitorAds.slice(0, 5)) { // TOP 5 concorrentes
         try {
           if (ad.image_urls) {
@@ -107,7 +107,7 @@ serve(async (req) => {
     } else {
       console.log('⚠️ Nenhum dado competitivo disponível - briefing sem análise competitiva');
     }
-    
+
     const hasVisualAnalysis = materialFileUrl && competitorImages.length > 0;
     if (hasVisualAnalysis) {
       console.log('🖼️ ANÁLISE VISUAL ATIVADA - Criativo base + ' + competitorImages.length + ' concorrentes');
@@ -120,10 +120,10 @@ serve(async (req) => {
 
     // Determinar company_id para uso (admin pode usar qualquer company)
     let companyIdToUse = profile?.company_id;
-    
+
     if (!companyIdToUse) {
       console.log('🔍 Admin sem company_id, buscando via contexto...');
-      
+
       // Tentar buscar company_id do projeto se fornecido
       if (projectId) {
         const { data: project } = await supabaseAdmin
@@ -131,13 +131,13 @@ serve(async (req) => {
           .select('company_id')
           .eq('id', projectId)
           .single();
-        
+
         if (project?.company_id) {
           companyIdToUse = project.company_id;
           console.log('✅ Company ID obtido do projeto:', companyIdToUse);
         }
       }
-      
+
       // Se ainda não tem company_id, tentar buscar da conta Meta
       if (!companyIdToUse && accountId) {
         const { data: metaAccount } = await supabaseAdmin
@@ -145,13 +145,13 @@ serve(async (req) => {
           .select('company_id')
           .eq('account_id', accountId)
           .single();
-        
+
         if (metaAccount?.company_id) {
           companyIdToUse = metaAccount.company_id;
           console.log('✅ Company ID obtido da conta Meta:', companyIdToUse);
         }
       }
-      
+
       // Se admin ainda não conseguiu company_id, continuamos mas logamos
       if (!companyIdToUse) {
         console.log('⚠️ Admin sem company_id definido, mas continuando...');
@@ -166,11 +166,11 @@ serve(async (req) => {
         .select('account_name')
         .eq('account_id', accountId)
         .maybeSingle();
-      
+
       accountName = accountData?.account_name || '';
       console.log(`Account name: ${accountName}`);
     }
-    
+
     // Verificar se é conta Mandic
     const isMandic = accountName && (
       accountName.toLowerCase().includes('são leopoldo mandic') ||
@@ -207,7 +207,7 @@ serve(async (req) => {
     }
 
     // ===== FUNÇÕES AUXILIARES PARA IDENTIDADE VISUAL =====
-    
+
     // Extrair cores da marca do creativeAnalysis
     const extractBrandColors = (analysis: string): string[] => {
       const colorMatches = analysis.match(/#[0-9A-Fa-f]{6}/g) || [];
@@ -215,18 +215,18 @@ serve(async (req) => {
     };
 
     // Detectar eventos sazonais baseado na data e análise de mercado
-    const detectSeasonalEvent = (competitorAds: any[], marketAnalysis: string): { 
-      isSeasonalEvent: boolean; 
-      eventName: string; 
-      recommendedColors: string[] 
+    const detectSeasonalEvent = (competitorAds: any[], marketAnalysis: string): {
+      isSeasonalEvent: boolean;
+      eventName: string;
+      recommendedColors: string[]
     } => {
       const now = new Date();
       const month = now.getMonth() + 1; // 1-12
       const day = now.getDate();
-      
+
       // Analisar texto da análise de mercado para keywords
       const analysisLower = (marketAnalysis || '').toLowerCase();
-      
+
       // Black Friday (Novembro)
       if (month === 11 || analysisLower.includes('black friday') || analysisLower.includes('blackfriday')) {
         return {
@@ -235,7 +235,7 @@ serve(async (req) => {
           recommendedColors: ['#000000', '#FF0000', '#FFFF00'] // Preto, vermelho, amarelo
         };
       }
-      
+
       // Natal (Dezembro)
       if (month === 12 || analysisLower.includes('natal') || analysisLower.includes('christmas')) {
         return {
@@ -244,7 +244,7 @@ serve(async (req) => {
           recommendedColors: ['#C41E3A', '#0F8B3D', '#FFD700'] // Vermelho, verde, dourado
         };
       }
-      
+
       // Ano Novo (Dezembro/Janeiro)
       if ((month === 12 && day >= 26) || month === 1) {
         return {
@@ -253,7 +253,7 @@ serve(async (req) => {
           recommendedColors: ['#FFD700', '#FFFFFF', '#000000'] // Dourado, branco, preto
         };
       }
-      
+
       // Dia dos Namorados (Junho no Brasil)
       if (month === 6 || analysisLower.includes('namorados') || analysisLower.includes('amor')) {
         return {
@@ -262,7 +262,7 @@ serve(async (req) => {
           recommendedColors: ['#FF69B4', '#FF1493', '#FFC0CB'] // Rosa forte, rosa médio, rosa claro
         };
       }
-      
+
       // Páscoa (Março/Abril - aproximado)
       if ((month === 3 || month === 4) && (analysisLower.includes('páscoa') || analysisLower.includes('pascoa'))) {
         return {
@@ -271,7 +271,7 @@ serve(async (req) => {
           recommendedColors: ['#8B4513', '#FFD700', '#FF69B4'] // Marrom chocolate, dourado, rosa
         };
       }
-      
+
       // Nenhum evento sazonal detectado
       return {
         isSeasonalEvent: false,
@@ -289,7 +289,7 @@ serve(async (req) => {
     console.log('🎄 Evento sazonal:', seasonalEvent);
 
     // Determinar estratégia de cores
-    const colorStrategy = seasonalEvent.isSeasonalEvent 
+    const colorStrategy = seasonalEvent.isSeasonalEvent
       ? `
 **🎨 ESTRATÉGIA DE CORES - EVENTO SAZONAL (${seasonalEvent.eventName}):**
 
@@ -317,9 +317,9 @@ Exemplos de aplicação:
 ⚠️ CRÍTICO: Mantenha a identidade visual do criativo original.
 
 **PALETA DA MARCA (cores detectadas do criativo base):**
-${brandColors.length > 0 
-  ? brandColors.map((color, i) => `- Cor ${i + 1}: ${color}`).join('\n')
-  : '- Nenhuma cor específica detectada - use análise visual do criativo base'}
+${brandColors.length > 0
+        ? brandColors.map((color, i) => `- Cor ${i + 1}: ${color}`).join('\n')
+        : '- Nenhuma cor específica detectada - use análise visual do criativo base'}
 
 **REGRAS:**
 1. Mantenha as cores dominantes do criativo original
@@ -420,7 +420,7 @@ Antes de entregar, verifique:
 
 
     // Instruções específicas por formato
-    const formatInstructions = targetFormat === 'carousel' 
+    const formatInstructions = targetFormat === 'carousel'
       ? `
 **📱 INSTRUÇÕES PARA CARROSSEL:**
 - Gere wireframe com estrutura para 3-5 slides (cards)
@@ -429,9 +429,9 @@ Antes de entregar, verifique:
 - Último card deve ter CTA forte e claro
 - No campo "rationale", explique a jornada narrativa dos cards
 - IMPORTANTE: Gere apenas UM wireframe que represente o conceito visual geral - a estrutura multi-card será interpretada pelo designer
-` 
-      : targetFormat === 'video' 
-      ? `
+`
+      : targetFormat === 'video'
+        ? `
 **🎬 INSTRUÇÕES PARA VÍDEO:**
 - Gere wireframe que represente o conceito visual do vídeo
 - No campo "rationale", inclua um storyboard com 3-5 cenas:
@@ -442,8 +442,8 @@ Antes de entregar, verifique:
 - Para cada cena, descreva: duração, descrição visual, texto/narração sugerida
 - Mantenha ritmo dinâmico (máx 3-5s por cena para vídeos curtos)
 - IMPORTANTE: O wireframe deve capturar o frame-chave principal do vídeo
-` 
-      : `
+`
+        : `
 **📐 INSTRUÇÕES PARA IMAGEM ESTÁTICA:**
 - Gere wireframe tradicional de imagem estática
 - Foco em hierarquia visual clara e impactante
@@ -474,12 +474,12 @@ Antes de entregar, verifique:
     };
 
     // 2. Generate wireframe with OpenAI based on creative analysis
-    const wireframePromptPrefix = hasVisualAnalysis 
+    const wireframePromptPrefix = hasVisualAnalysis
       ? `Com base na análise IA do criativo de alta performance abaixo, gere um WIREFRAME VISUAL (esqueleto estrutural) para criação de uma nova versão otimizada do anúncio.
 
 ⚠️ IMPORTANTE: Você receberá IMAGENS REAIS do criativo base e de ${competitorImages.length} concorrentes. Faça uma ANÁLISE VISUAL PROFUNDA comparando os elementos visuais.`
       : `Com base na análise IA do criativo de alta performance abaixo, gere um WIREFRAME VISUAL (esqueleto estrutural) para criação de uma nova versão otimizada do anúncio:`;
-    
+
     const wireframePrompt = `${wireframePromptPrefix}
 
 CRIATIVO BASE:
@@ -591,7 +591,7 @@ Compare VISUALMENTE o criativo base com os concorrentes nas seguintes dimensões
 2. Cada insight DEVE ter UM URL diferente dos ${competitorImages.length} fornecidos
 3. Use APENAS estes URLs (NÃO INVENTE URLs):
 
-${competitorImageMapping.map((c, i) => `   ${i+1}. "${c.page_name}" → ${c.url}`).join('\n')}
+${competitorImageMapping.map((c, i) => `   ${i + 1}. "${c.page_name}" → ${c.url}`).join('\n')}
 
 4. EXEMPLO DE INSIGHT VÁLIDO:
 {
@@ -640,16 +640,15 @@ ${competitorAds.slice(0, 10).map((ad: any, i: number) => `
 ` : ''}
 
 ANÁLISE IA DO CRIATIVO:
-${
-  creativeAnalysis
-    ? (typeof creativeAnalysis === 'string'
-        ? `Texto da Análise: ${creativeAnalysis}`
-        : `Análise Visual: ${JSON.stringify(creativeAnalysis.visual_analysis, null, 2)}
+${creativeAnalysis
+        ? (typeof creativeAnalysis === 'string'
+          ? `Texto da Análise: ${creativeAnalysis}`
+          : `Análise Visual: ${JSON.stringify(creativeAnalysis.visual_analysis, null, 2)}
 Análise de Métricas: ${JSON.stringify(creativeAnalysis.metrics_analysis, null, 2)}  
 Insights de Performance: ${JSON.stringify(creativeAnalysis.performance_insights, null, 2)}
 Recomendações: ${JSON.stringify(creativeAnalysis.recommendations, null, 2)}`)
-    : 'Análise IA não disponível'
-}
+        : 'Análise IA não disponível'
+      }
 
 IMPORTANTE: Este wireframe é para empresas como franqueadoras, universidades e indústrias (ex: Hyster e Yale). Mantenha o tom profissional e focado.
 
@@ -813,34 +812,34 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
 `;
 
     // Construir mensagem com ou sem imagens
-    const userMessage: any = hasVisualAnalysis 
+    const userMessage: any = hasVisualAnalysis
       ? {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: wireframePrompt
-            },
-            // Imagem do criativo base
-            {
-              type: 'image_url',
-              image_url: {
-                url: materialFileUrl
-              }
-            },
-            // Imagens dos concorrentes
-            ...competitorImages.map((url: string) => ({
-              type: 'image_url',
-              image_url: {
-                url: url
-              }
-            }))
-          ]
-        }
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: wireframePrompt
+          },
+          // Imagem do criativo base
+          {
+            type: 'image_url',
+            image_url: {
+              url: materialFileUrl
+            }
+          },
+          // Imagens dos concorrentes
+          ...competitorImages.map((url: string) => ({
+            type: 'image_url',
+            image_url: {
+              url: url
+            }
+          }))
+        ]
+      }
       : {
-          role: 'user',
-          content: wireframePrompt
-        };
+        role: 'user',
+        content: wireframePrompt
+      };
 
     // Schema para function calling do Gemini
     const responseSchema = {
@@ -969,57 +968,57 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
     }
 
     const geminiData = await geminiResponse.json();
-    
+
     let wireframeData;
     try {
       const functionCall = geminiData.candidates[0].content.parts[0].functionCall;
-      
+
       if (!functionCall || functionCall.name !== 'generate_briefing') {
         console.error('No valid function call in response:', JSON.stringify(geminiData).substring(0, 500));
         throw new Error('AI did not return structured data');
       }
-      
+
       wireframeData = functionCall.args;
-        
-        // Log dos actionable_insights recebidos
-        console.log('🎯 Actionable insights received:', {
-          hasSection: !!wireframeData.competitive_insights?.actionable_insights,
-          count: wireframeData.competitive_insights?.actionable_insights?.length || 0,
-          firstInsight: wireframeData.competitive_insights?.actionable_insights?.[0]
-        });
-        
-        // Validar e garantir actionable_insights
-        if (wireframeData.competitive_insights && hasVisualAnalysis) {
-          if (!wireframeData.competitive_insights.actionable_insights || 
-              wireframeData.competitive_insights.actionable_insights.length === 0) {
-            
-            console.warn('⚠️ IA não retornou actionable_insights, gerando fallback...');
-            
-            // Fallback: criar pelo menos 1 insight usando o primeiro concorrente
-            wireframeData.competitive_insights.actionable_insights = [
-              {
-                recommendation: "Testar elementos visuais dos concorrentes top",
-                rationale: `Análise de ${competitorImages.length} concorrentes revelou padrões visuais não explorados`,
-                competitor_example_url: competitorImageMapping[0]?.url || '',
-                competitor_example_page_name: competitorImageMapping[0]?.page_name || 'Concorrente',
-                visual_annotation: "Compare os elementos visuais desta referência com seu criativo atual"
-              }
-            ];
-          }
-          
-          // Validar URLs nos insights
-          const validUrls = competitorImageMapping.map(c => c.url);
-          wireframeData.competitive_insights.actionable_insights = 
-            wireframeData.competitive_insights.actionable_insights.filter((insight: any) => {
-              const isValid = validUrls.includes(insight.competitor_example_url);
-              if (!isValid) {
-                console.warn(`⚠️ Insight com URL inválido removido: ${insight.competitor_example_url}`);
-              }
-              return isValid;
-            });
-          
-          console.log(`✅ ${wireframeData.competitive_insights.actionable_insights.length} actionable insights validados`);
+
+      // Log dos actionable_insights recebidos
+      console.log('🎯 Actionable insights received:', {
+        hasSection: !!wireframeData.competitive_insights?.actionable_insights,
+        count: wireframeData.competitive_insights?.actionable_insights?.length || 0,
+        firstInsight: wireframeData.competitive_insights?.actionable_insights?.[0]
+      });
+
+      // Validar e garantir actionable_insights
+      if (wireframeData.competitive_insights && hasVisualAnalysis) {
+        if (!wireframeData.competitive_insights.actionable_insights ||
+          wireframeData.competitive_insights.actionable_insights.length === 0) {
+
+          console.warn('⚠️ IA não retornou actionable_insights, gerando fallback...');
+
+          // Fallback: criar pelo menos 1 insight usando o primeiro concorrente
+          wireframeData.competitive_insights.actionable_insights = [
+            {
+              recommendation: "Testar elementos visuais dos concorrentes top",
+              rationale: `Análise de ${competitorImages.length} concorrentes revelou padrões visuais não explorados`,
+              competitor_example_url: competitorImageMapping[0]?.url || '',
+              competitor_example_page_name: competitorImageMapping[0]?.page_name || 'Concorrente',
+              visual_annotation: "Compare os elementos visuais desta referência com seu criativo atual"
+            }
+          ];
         }
+
+        // Validar URLs nos insights
+        const validUrls = competitorImageMapping.map(c => c.url);
+        wireframeData.competitive_insights.actionable_insights =
+          wireframeData.competitive_insights.actionable_insights.filter((insight: any) => {
+            const isValid = validUrls.includes(insight.competitor_example_url);
+            if (!isValid) {
+              console.warn(`⚠️ Insight com URL inválido removido: ${insight.competitor_example_url}`);
+            }
+            return isValid;
+          });
+
+        console.log(`✅ ${wireframeData.competitive_insights.actionable_insights.length} actionable insights validados`);
+      }
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', parseError);
       // Fallback wireframe structure (novo formato)
@@ -1072,10 +1071,10 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
     // Transformar o wireframe em material completo baseado no formato
     let materialId: string;
     let materialStatus = 'approved';
-    
+
     if (targetFormat === 'carousel') {
       console.log('🎨 Gerando carrossel com imagens...');
-      
+
       // Gerar imagens para os slides
       const { imageUrls, caption, slides } = await generateCarouselImages(
         wireframeData.wireframe.slides || [],
@@ -1084,9 +1083,9 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
         supabaseAdmin,
         projectId
       );
-      
+
       console.log(`✅ Carrossel gerado com ${slides.length} slides`);
-      
+
       // Salvar em materials com wireframe_data
       const { data: material, error: insertError } = await supabaseAdmin
         .from('materials')
@@ -1104,7 +1103,7 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
             isCarousel: true,
             slides: slides
           },
-          metadata: { 
+          metadata: {
             source_ad: adId,
             briefing_data: wireframeData
           },
@@ -1112,48 +1111,48 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
         })
         .select()
         .single();
-      
+
       if (insertError) {
         console.error('Error creating carousel material:', insertError);
         throw insertError;
       }
-      
+
       materialId = material.id;
-      
+
     } else if (targetFormat === 'video') {
       console.log('🎥 Iniciando geração de vídeo...');
-      
+
       // Construir prompt e iniciar Veo
       const videoPrompt = buildVideoPromptFromStoryboard(
         wireframeData.wireframe.storyboard || [],
         wireframeData.objective || '',
         { ad_name: adName, ad_copy: materialCaption }
       );
-      
+
       console.log('📝 Prompt do vídeo:', videoPrompt);
-      
+
       // Iniciar geração com Veo
       const veoOperation = await initiateVeoVideoGeneration({
         prompt: videoPrompt,
         imageUrl: materialFileUrl || '',
         geminiApiKey
       });
-      
+
       console.log('✅ Operação Veo iniciada:', veoOperation.name);
-      
+
       // Criar canvas visual do storyboard
       const canvasData = generateVideoCanvas(
         wireframeData.wireframe.storyboard || [],
         wireframeData.legenda_section?.legenda_principal || ''
       );
-      
+
       // Salvar em materials com status processing
       const { data: material, error: insertError } = await supabaseAdmin
         .from('materials')
         .insert({
           name: `Vídeo - Baseado em ${adName}`,
           type: 'video',
-          is_briefing: false,
+          is_briefing: true,
           project_id: projectId,
           company_id: companyIdToUse,
           created_by: profile.id,
@@ -1171,23 +1170,23 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
         })
         .select()
         .single();
-      
+
       if (insertError) {
         console.error('Error creating video material:', insertError);
         throw insertError;
       }
-      
+
       materialId = material.id;
       materialStatus = 'processing';
-      
+
     } else if (targetFormat === 'static') {
       console.log('🖼️ Gerando imagem estática...');
-      
+
       // Gerar canvas JSON
       const canvasData = generateStaticCanvas(wireframeData.wireframe);
-      
+
       console.log('✅ Canvas estático gerado');
-      
+
       // Salvar em materials com canvas_data
       const { data: material, error: insertError } = await supabaseAdmin
         .from('materials')
@@ -1202,7 +1201,7 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
           caption: wireframeData.legenda_section?.legenda_principal,
           file_url: null,
           wireframe_data: wireframeData.wireframe,
-          metadata: { 
+          metadata: {
             source_ad: adId,
             briefing_data: wireframeData
           },
@@ -1210,12 +1209,12 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
         })
         .select()
         .single();
-      
+
       if (insertError) {
         console.error('Error creating static material:', insertError);
         throw insertError;
       }
-      
+
       materialId = material.id;
     } else {
       throw new Error(`Formato não suportado: ${targetFormat}`);
@@ -1224,8 +1223,8 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
     console.log(`✅ Material criado com sucesso: ${materialId} (status: ${materialStatus})`);
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         materialId: materialId,
         status: materialStatus,
         format: targetFormat
@@ -1395,7 +1394,7 @@ function generateVideoCanvas(storyboard: any[], caption: string): string {
   const frameWidth = 600;
   const frameHeight = 120;
   const margin = 20;
-  
+
   // Título "STORYBOARD DO VÍDEO"
   objects.push({
     type: 'textbox',
@@ -1428,7 +1427,7 @@ function generateVideoCanvas(storyboard: any[], caption: string): string {
   // Cada frame do storyboard
   storyboard.forEach((scene, index) => {
     const yPos = 140 + (index * (frameHeight + margin));
-    
+
     // Retângulo do frame
     objects.push({
       type: 'rect',
@@ -1443,7 +1442,7 @@ function generateVideoCanvas(storyboard: any[], caption: string): string {
       ry: 8,
       selectable: true
     });
-    
+
     // Número da cena
     objects.push({
       type: 'text',
@@ -1456,7 +1455,7 @@ function generateVideoCanvas(storyboard: any[], caption: string): string {
       fontFamily: 'Arial',
       selectable: true
     });
-    
+
     // Descrição da cena
     objects.push({
       type: 'textbox',
@@ -1469,7 +1468,7 @@ function generateVideoCanvas(storyboard: any[], caption: string): string {
       fontFamily: 'Arial',
       selectable: true
     });
-    
+
     // Texto da cena (se houver)
     if (scene.text) {
       objects.push({
@@ -1515,12 +1514,12 @@ async function generateCarouselImages(
 }> {
   const imageUrls: string[] = [];
   const slides: Array<{ imageUrl: string; index: number }> = [];
-  
+
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
-    
+
     console.log(`Generating image for card ${i + 1}/${cards.length}...`);
-    
+
     // Prompt detalhado para geração de imagem
     const imagePrompt = `
 Crie uma imagem publicitária profissional para redes sociais (1080x1080px) com:
@@ -1540,93 +1539,93 @@ REQUISITOS:
 - Sem watermarks ou logos genéricos
 - Texto bem integrado ao design visual
     `.trim();
-    
-      // Tenta primeiro com Gemini usando o modelo de imagem
-      try {
-        const geminiModel = 'gemini-2.5-flash-image';
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: imagePrompt }
-                  ]
-                }
-              ]
-            })
-          }
-        );
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Gemini API error for card ${i + 1}:`, response.status, errorText);
-          throw new Error(`Gemini API error: ${response.status}`);
+    // Tenta primeiro com Gemini usando o modelo de imagem
+    try {
+      const geminiModel = 'gemini-2.5-flash-image';
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: imagePrompt }
+                ]
+              }
+            ]
+          })
         }
+      );
 
-        const data = await response.json();
-
-        // Procurar a imagem em inlineData (camelCase) ou inline_data (snake_case)
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        let base64Image: string | undefined;
-        let mimeType: string = 'image/jpeg';
-        for (const part of parts) {
-          if (part?.inlineData?.data) {
-            base64Image = part.inlineData.data;
-            mimeType = part.inlineData.mimeType || mimeType;
-            break;
-          }
-          if (part?.inline_data?.data) {
-            base64Image = part.inline_data.data;
-            mimeType = part.inline_data.mimeType || mimeType;
-            break;
-          }
-        }
-
-        if (!base64Image) {
-          console.error('Unexpected Gemini response structure:', JSON.stringify(data).substring(0, 500));
-          throw new Error('Invalid response from Gemini Image API');
-        }
-
-        // Converter base64 para Uint8Array
-        const binaryString = atob(base64Image);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let j = 0; j < binaryString.length; j++) {
-          bytes[j] = binaryString.charCodeAt(j);
-        }
-
-        // Upload para Supabase Storage
-        const fileName = `carousel-${projectId}-${Date.now()}-slide-${i + 1}.jpg`;
-        const { data: uploadData, error: uploadError } = await supabaseClient.storage
-          .from('materials')
-          .upload(fileName, bytes, {
-            contentType: mimeType,
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
-        }
-
-        // Obter URL pública
-        const { data: { publicUrl } } = supabaseClient.storage
-          .from('materials')
-          .getPublicUrl(fileName);
-
-        console.log(`Card ${i + 1} image generated successfully: ${publicUrl}`);
-
-        imageUrls.push(publicUrl);
-        slides.push({ imageUrl: publicUrl, index: i });
-      } catch (geminiErr) {
-        console.error(`Error generating image for card ${i + 1}:`, geminiErr);
-        throw geminiErr;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Gemini API error for card ${i + 1}:`, response.status, errorText);
+        throw new Error(`Gemini API error: ${response.status}`);
       }
+
+      const data = await response.json();
+
+      // Procurar a imagem em inlineData (camelCase) ou inline_data (snake_case)
+      const parts = data?.candidates?.[0]?.content?.parts || [];
+      let base64Image: string | undefined;
+      let mimeType: string = 'image/jpeg';
+      for (const part of parts) {
+        if (part?.inlineData?.data) {
+          base64Image = part.inlineData.data;
+          mimeType = part.inlineData.mimeType || mimeType;
+          break;
+        }
+        if (part?.inline_data?.data) {
+          base64Image = part.inline_data.data;
+          mimeType = part.inline_data.mimeType || mimeType;
+          break;
+        }
+      }
+
+      if (!base64Image) {
+        console.error('Unexpected Gemini response structure:', JSON.stringify(data).substring(0, 500));
+        throw new Error('Invalid response from Gemini Image API');
+      }
+
+      // Converter base64 para Uint8Array
+      const binaryString = atob(base64Image);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let j = 0; j < binaryString.length; j++) {
+        bytes[j] = binaryString.charCodeAt(j);
+      }
+
+      // Upload para Supabase Storage
+      const fileName = `carousel-${projectId}-${Date.now()}-slide-${i + 1}.jpg`;
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('materials')
+        .upload(fileName, bytes, {
+          contentType: mimeType,
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
+
+      // Obter URL pública
+      const { data: { publicUrl } } = supabaseClient.storage
+        .from('materials')
+        .getPublicUrl(fileName);
+
+      console.log(`Card ${i + 1} image generated successfully: ${publicUrl}`);
+
+      imageUrls.push(publicUrl);
+      slides.push({ imageUrl: publicUrl, index: i });
+    } catch (geminiErr) {
+      console.error(`Error generating image for card ${i + 1}:`, geminiErr);
+      throw geminiErr;
+    }
   }
-  
+
   return { imageUrls, caption: originalCaption, slides };
 }
 
@@ -1639,17 +1638,17 @@ function buildVideoPromptFromStoryboard(
   adData: any
 ): string {
   let prompt = `Create a professional 8-second video advertisement based on this storyboard:\n\n`;
-  
+
   // Adicionar contexto do anúncio
   if (adData.ad_name || adData.headline) {
     prompt += `Product/Campaign: ${adData.ad_name || adData.headline}\n\n`;
   }
-  
+
   // Adicionar descrição geral
   if (videoDescription) {
     prompt += `Overall vision: ${videoDescription}\n\n`;
   }
-  
+
   // Adicionar cada cena do storyboard
   prompt += `Scene breakdown:\n`;
   storyboard.forEach((scene, idx) => {
@@ -1662,7 +1661,7 @@ function buildVideoPromptFromStoryboard(
       prompt += `- Voiceover: "${scene.voiceover}"\n`;
     }
   });
-  
+
   prompt += `\n
 Technical requirements:
 - Duration: 8 seconds total
@@ -1671,7 +1670,7 @@ Technical requirements:
 - Transitions: Smooth and engaging
 - Audio: Background music matching the mood
 - Quality: Cinematic, high production value`;
-  
+
   return prompt;
 }
 
@@ -1687,10 +1686,10 @@ async function initiateVeoVideoGeneration({
   imageUrl: string;
   geminiApiKey: string;
 }): Promise<{ name: string }> {
-  
+
   // Primeiro, fazer upload da imagem para o Gemini Files API
   let imageData: any;
-  
+
   if (imageUrl) {
     try {
       // Download da imagem
@@ -1703,7 +1702,7 @@ async function initiateVeoVideoGeneration({
           ''
         )
       );
-      
+
       imageData = {
         inlineData: {
           mimeType: 'image/jpeg',
@@ -1715,7 +1714,7 @@ async function initiateVeoVideoGeneration({
       // Continuar sem imagem se falhar
     }
   }
-  
+
   // Chamar API do Veo 3.1
   const requestBody: any = {
     instances: [{
@@ -1726,12 +1725,12 @@ async function initiateVeoVideoGeneration({
       negativePrompt: 'low quality, blurry, distorted, cartoon, drawing'
     }
   };
-  
+
   // Adicionar imagem de referência se disponível
   if (imageData) {
     requestBody.instances[0].image = imageData;
   }
-  
+
   const response = await fetch(
     'https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning',
     {
@@ -1743,15 +1742,15 @@ async function initiateVeoVideoGeneration({
       body: JSON.stringify(requestBody)
     }
   );
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Veo API error:', response.status, errorText);
     throw new Error(`Veo API error: ${response.status} - ${errorText}`);
   }
-  
+
   const data = await response.json();
   console.log('Veo operation created:', data);
-  
+
   return { name: data.name };
 }
