@@ -10,15 +10,15 @@ interface ThumbnailProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export const Thumbnail = ({ 
-  type, 
-  thumbnail, 
-  name, 
-  className, 
-  size = 'md' 
+export const Thumbnail = ({
+  type,
+  thumbnail,
+  name,
+  className,
+  size = 'md'
 }: ThumbnailProps) => {
   const [imageError, setImageError] = useState(false);
-  
+
   const sizeClasses = {
     sm: 'w-8 h-8',
     md: 'w-12 h-12',
@@ -88,8 +88,10 @@ export const Thumbnail = ({
     }
   }
 
-  // Para wireframe e carousel, sempre mostrar ícone; para outros, mostrar ícone se não houver thumbnail
-  if (type === 'wireframe' || type === 'carousel' || !displayThumbnail || imageError || type === 'pdf') {
+  // Para wireframe sem thumbnail, sempre mostrar ícone
+  // Para carousel, mostrar imagem se tiver thumbnail, senão ícone
+  // Para PDF, sempre mostrar ícone
+  if (type === 'pdf' || (type === 'wireframe' && !displayThumbnail) || (!displayThumbnail || imageError)) {
     return (
       <div className={cn(
         "rounded-lg border-2 flex items-center justify-center",
@@ -111,8 +113,8 @@ export const Thumbnail = ({
         sizeClasses[size],
         className
       )}>
-        <img 
-          src={displayThumbnail} 
+        <img
+          src={displayThumbnail}
           alt={name}
           className="w-full h-full object-cover"
           onError={() => setImageError(true)}
@@ -129,8 +131,8 @@ export const Thumbnail = ({
         sizeClasses[size],
         className
       )}>
-        <img 
-          src={displayThumbnail} 
+        <img
+          src={displayThumbnail}
           alt={name}
           className="w-full h-full object-cover"
           onError={() => setImageError(true)}
@@ -139,6 +141,47 @@ export const Thumbnail = ({
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
           <div className="w-3 h-3 border-l-4 border-white border-l-solid border-y-2 border-y-transparent ml-0.5"></div>
         </div>
+      </div>
+    );
+  }
+
+  // Carousel with image
+  if (type === 'carousel' && displayThumbnail) {
+    return (
+      <div className={cn(
+        "rounded-lg overflow-hidden bg-muted border-2 border-muted relative",
+        sizeClasses[size],
+        className
+      )}>
+        <img
+          src={displayThumbnail}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+          onLoad={() => setImageError(false)}
+        />
+        <div className="absolute top-2 right-2 bg-black/50 px-2 py-1 rounded text-xs text-white">
+          Carrossel
+        </div>
+      </div>
+    );
+  }
+
+  // Wireframe with image
+  if (type === 'wireframe' && displayThumbnail) {
+    return (
+      <div className={cn(
+        "rounded-lg overflow-hidden bg-muted border-2 border-muted",
+        sizeClasses[size],
+        className
+      )}>
+        <img
+          src={displayThumbnail}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+          onLoad={() => setImageError(false)}
+        />
       </div>
     );
   }
