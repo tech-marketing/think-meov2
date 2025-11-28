@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Filter, 
-  Search, 
-  Grid3X3, 
-  List, 
+import {
+  Filter,
+  Search,
+  Grid3X3,
+  List,
   Image,
   Video,
   FileText,
@@ -87,10 +87,10 @@ const ProjectView = () => {
 
     try {
       setLoading(true);
-      
+
       console.log('Loading project with ID:', id);
       console.log('Current user profile:', profile);
-      
+
       // Buscar dados do projeto
       const { data: projectData, error: projectError } = await supabase
         .from('projects')
@@ -133,7 +133,7 @@ const ProjectView = () => {
         const now = new Date();
         const diffTime = date.getTime() - now.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays === 0) {
           dueDate = 'Hoje';
         } else if (diffDays === 1) {
@@ -153,7 +153,7 @@ const ProjectView = () => {
           .select('full_name')
           .eq('id', projectData.created_by)
           .maybeSingle();
-        
+
         if (creatorProfile) {
           createdByName = creatorProfile.full_name;
         }
@@ -173,28 +173,28 @@ const ProjectView = () => {
       const processedMaterials: Material[] = (materialsData || []).map(material => {
         // Priorizar o tipo do banco, usar detecção como fallback
         let materialType: 'image' | 'video' | 'pdf' | 'wireframe' = material.type as Material['type'] || 'image';
-        
+
         // Map legacy 'copy' type to 'wireframe'
         if (material.type === 'copy') {
           materialType = 'wireframe';
         }
-        
+
         // Se o tipo do banco for 'image' mas não for realmente uma imagem, detectar o correto
         if (materialType === 'image') {
           const fileName = material.name?.toLowerCase() || '';
           const fileUrl = material.file_url?.toLowerCase() || '';
-          
+
           // Verificar extensões de vídeo
-          if (fileName.includes('video') || 
-              fileUrl.includes('.mp4') || fileUrl.includes('.mov') || 
-              fileUrl.includes('.avi') || fileUrl.includes('.webm') ||
-              fileName.includes('.mp4') || fileName.includes('.mov') ||
-              fileName.includes('.avi') || fileName.includes('.webm')) {
+          if (fileName.includes('video') ||
+            fileUrl.includes('.mp4') || fileUrl.includes('.mov') ||
+            fileUrl.includes('.avi') || fileUrl.includes('.webm') ||
+            fileName.includes('.mp4') || fileName.includes('.mov') ||
+            fileName.includes('.avi') || fileName.includes('.webm')) {
             materialType = 'video';
           }
           // Verificar extensões de PDF
           else if (fileName.includes('pdf') || fileUrl.includes('.pdf') ||
-                   fileName.includes('.pdf')) {
+            fileName.includes('.pdf')) {
             materialType = 'pdf';
           }
         }
@@ -205,7 +205,7 @@ const ProjectView = () => {
           type: materialType,
           status: material.status as Material['status'],
           comments: 0, // TODO: contar comentários
-          thumbnail: material.file_url,
+          thumbnail: material.thumbnail_url,
           is_running: material.is_running ?? true
         };
       });
@@ -230,8 +230,8 @@ const ProjectView = () => {
         if (!convertedError && convertedMaterials) {
           // Filtrar briefings que já foram convertidos em materiais
           const availableBriefings = briefingsApprovedData.filter(briefing => {
-            return !convertedMaterials.some(material => 
-              JSON.stringify(material.wireframe_data) === JSON.stringify(briefing.wireframe_data) && 
+            return !convertedMaterials.some(material =>
+              JSON.stringify(material.wireframe_data) === JSON.stringify(briefing.wireframe_data) &&
               material.caption === briefing.caption
             );
           });
@@ -268,7 +268,7 @@ const ProjectView = () => {
     const filtered = materials.filter(material => {
       const matchesSearch = material.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filterType === 'all' || material.type === filterType;
-      
+
       // Corrigir filtro de status para incluir tanto needs_adjustment quanto rejected
       let matchesStatus = statusFilter === 'all';
       if (statusFilter === 'needs_adjustment') {
@@ -276,15 +276,15 @@ const ProjectView = () => {
       } else if (statusFilter !== 'all') {
         matchesStatus = material.status === statusFilter;
       }
-      
+
       // Aplicar filtro de is_running apenas quando statusFilter === 'client_approval'
       let matchesRunning = true;
       if (statusFilter === 'client_approval' && runningFilter !== 'all') {
-        matchesRunning = runningFilter === 'running' 
-          ? material.is_running === true 
+        matchesRunning = runningFilter === 'running'
+          ? material.is_running === true
           : material.is_running === false;
       }
-      
+
       return matchesSearch && matchesFilter && matchesStatus && matchesRunning;
     });
     setFilteredMaterials(filtered);
@@ -346,7 +346,7 @@ const ProjectView = () => {
                 <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform duration-200" />
                 <span className="text-sm font-medium">Voltar</span>
               </Button>
-              
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -379,8 +379,8 @@ const ProjectView = () => {
                   >
                     Briefings Aprovados
                     {briefingsApprovedCount > 0 && (
-                      <Badge 
-                        variant="destructive" 
+                      <Badge
+                        variant="destructive"
                         className="ml-auto h-5 w-5 p-0 text-xs rounded-full flex items-center justify-center"
                       >
                         {briefingsApprovedCount || 0}
@@ -462,7 +462,7 @@ const ProjectView = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     {profile && (profile.role === 'admin' || profile.role === 'collaborator') && (
-                      <DeleteProjectModal 
+                      <DeleteProjectModal
                         projectId={project.id}
                         projectName={project.name}
                       />
@@ -484,7 +484,7 @@ const ProjectView = () => {
             {activeSection === 'briefing' && (
               <Card className="border-0">
                 <CardContent className="p-6">
-                  <BriefingSection 
+                  <BriefingSection
                     projectId={project.id}
                     onBriefingView={setCurrentBriefing}
                   />
@@ -495,8 +495,8 @@ const ProjectView = () => {
             {activeSection === 'briefing-approved' && (
               <Card className="border-0">
                 <CardContent className="p-6">
-                  <BriefingApprovedSection 
-                    projectId={project.id} 
+                  <BriefingApprovedSection
+                    projectId={project.id}
                     onMaterialCreated={loadProject}
                   />
                 </CardContent>
@@ -535,10 +535,9 @@ const ProjectView = () => {
 
                     {/* Stats Cards - Materiais */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      <Card 
-                        className={`cursor-pointer transition-all duration-200 ${
-                          statusFilter === 'all' ? 'ring-2 ring-primary bg-primary/5' : 'hover:shadow-md'
-                        }`}
+                      <Card
+                        className={`cursor-pointer transition-all duration-200 ${statusFilter === 'all' ? 'ring-2 ring-primary bg-primary/5' : 'hover:shadow-md'
+                          }`}
                         onClick={() => setStatusFilter('all')}
                       >
                         <CardContent className="p-4">
@@ -553,11 +552,10 @@ const ProjectView = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
-                      <Card 
-                        className={`cursor-pointer transition-all duration-200 ${
-                          statusFilter === 'client_approval' ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''
-                        }`}
+
+                      <Card
+                        className={`cursor-pointer transition-all duration-200 ${statusFilter === 'client_approval' ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''
+                          }`}
                         onClick={() => {
                           setStatusFilter(statusFilter === 'client_approval' ? 'all' : 'client_approval');
                           setRunningFilter('all');
@@ -576,10 +574,9 @@ const ProjectView = () => {
                         </CardContent>
                       </Card>
 
-                      <Card 
-                        className={`cursor-pointer transition-all duration-200 ${
-                          statusFilter === 'internal_approval' ? 'ring-2 ring-purple-500 bg-purple-500/10' : ''
-                        }`}
+                      <Card
+                        className={`cursor-pointer transition-all duration-200 ${statusFilter === 'internal_approval' ? 'ring-2 ring-purple-500 bg-purple-500/10' : ''
+                          }`}
                         onClick={() => setStatusFilter(statusFilter === 'internal_approval' ? 'all' : 'internal_approval')}
                       >
                         <CardContent className="p-4">
@@ -594,11 +591,10 @@ const ProjectView = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
-                      <Card 
-                        className={`cursor-pointer transition-all duration-200 ${
-                          statusFilter === 'pending' ? 'ring-2 ring-warning bg-warning/5' : ''
-                        }`}
+
+                      <Card
+                        className={`cursor-pointer transition-all duration-200 ${statusFilter === 'pending' ? 'ring-2 ring-warning bg-warning/5' : ''
+                          }`}
                         onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
                       >
                         <CardContent className="p-4">
@@ -613,11 +609,10 @@ const ProjectView = () => {
                           </div>
                         </CardContent>
                       </Card>
-                      
-                      <Card 
-                        className={`cursor-pointer transition-all duration-200 ${
-                          statusFilter === 'needs_adjustment' ? 'ring-2 ring-destructive bg-destructive/5' : ''
-                        }`}
+
+                      <Card
+                        className={`cursor-pointer transition-all duration-200 ${statusFilter === 'needs_adjustment' ? 'ring-2 ring-destructive bg-destructive/5' : ''
+                          }`}
                         onClick={() => setStatusFilter(statusFilter === 'needs_adjustment' ? 'all' : 'needs_adjustment')}
                       >
                         <CardContent className="p-4">
@@ -673,8 +668,8 @@ const ProjectView = () => {
                       />
                     </div>
 
-                    <MaterialsGrid 
-                      materials={filteredMaterials} 
+                    <MaterialsGrid
+                      materials={filteredMaterials}
                       viewMode={viewMode}
                       onMaterialUpdated={loadProject}
                       currentStatusFilter={statusFilter !== 'all' ? statusFilter : undefined}

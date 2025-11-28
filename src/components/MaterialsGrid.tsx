@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Tilt } from "./Tilt";
+import { HoverPreview } from "./HoverPreview";
 
 interface Material {
   id: string;
@@ -34,10 +36,10 @@ interface MaterialsGridProps {
   currentStatusFilter?: string;
 }
 
-export const MaterialsGrid = ({ 
-  materials, 
-  viewMode = 'grid', 
-  className, 
+export const MaterialsGrid = ({
+  materials,
+  viewMode = 'grid',
+  className,
   onMaterialUpdated,
   onMaterialClick: customOnMaterialClick,
   currentStatusFilter
@@ -47,6 +49,7 @@ export const MaterialsGrid = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [localMaterials, setLocalMaterials] = useState(materials);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
 
   // Update local materials when props change
   useEffect(() => {
@@ -70,7 +73,7 @@ export const MaterialsGrid = ({
 
   const saveEdit = async (materialId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     if (!editingName.trim()) {
       toast({
         title: "Erro",
@@ -82,7 +85,7 @@ export const MaterialsGrid = ({
 
     try {
       // Update optimistically
-      setLocalMaterials(prev => prev.map(m => 
+      setLocalMaterials(prev => prev.map(m =>
         m.id === materialId ? { ...m, name: editingName.trim() } : m
       ));
 
@@ -127,7 +130,7 @@ export const MaterialsGrid = ({
     return (
       <div className={cn("space-y-4", className)}>
         {materials.map((material) => (
-          <Card 
+          <Card
             key={material.id}
             className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0"
             onClick={() => handleMaterialClick(material.id)}
@@ -136,7 +139,7 @@ export const MaterialsGrid = ({
               <div className="flex items-center space-x-4">
                 {/* Thumbnail */}
                 <div className="flex-shrink-0 w-16 h-16 relative overflow-hidden rounded-lg">
-                  <Thumbnail 
+                  <Thumbnail
                     type={material.type}
                     thumbnail={material.thumbnail}
                     name={material.name}
@@ -144,7 +147,7 @@ export const MaterialsGrid = ({
                     className="w-full h-full object-cover"
                   />
                 </div>
-                
+
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between">
@@ -199,7 +202,7 @@ export const MaterialsGrid = ({
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Status and Comments */}
                     <div className="flex items-center space-x-3 ml-4">
                       <StatusBadge status={material.status} isRunning={material.is_running} />
@@ -223,90 +226,107 @@ export const MaterialsGrid = ({
   return (
     <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6", className)}>
       {localMaterials.map((material) => (
-        <Card 
-          key={material.id}
-          className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0 p-1"
-          onClick={() => handleMaterialClick(material.id)}
+        <Tilt
+          className="w-full"
+          rotationFactor={8}
+          springOptions={{ stiffness: 300, damping: 30 }}
         >
-          <CardContent className="p-0">
-            {/* Large Thumbnail */}
-            <div className="aspect-[4/3] relative overflow-hidden rounded-t-lg">
-              <Thumbnail 
-                type={material.type}
-                thumbnail={material.thumbnail}
-                name={material.name}
-                size="xl"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
-            
-            {/* Content */}
-            <div className="p-4 space-y-3">
-              <div className="space-y-2">
-                {editingId === material.id ? (
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Input
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      className="h-8 text-sm"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveEdit(material.id, e as any);
-                        if (e.key === 'Escape') cancelEdit(e as any);
-                      }}
-                    />
-                    <Button size="sm" variant="ghost" onClick={(e) => saveEdit(material.id, e)}>
-                      <Check className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={cancelEdit}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-base line-clamp-2 group-hover:text-primary transition-colors flex-1">
-                      {material.name}
-                    </h4>
-                    {canEdit(material) && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(e) => startEditing(material, e)}
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <Edit2 className="h-3 w-3" />
+          <Card
+            key={material.id}
+            className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0 p-1 h-full"
+            onClick={() => handleMaterialClick(material.id)}
+            onMouseEnter={() => setHoveredCardId(material.id)}
+            onMouseLeave={() => setHoveredCardId(null)}
+          >
+            <CardContent className="p-0">
+              {/* Large Thumbnail with Hover Preview */}
+              <div className="aspect-[4/3] relative overflow-hidden rounded-t-lg">
+                <Thumbnail
+                  type={material.type}
+                  thumbnail={material.thumbnail}
+                  name={material.name}
+                  size="xl"
+                  className="w-full h-full object-cover"
+                />
+                {/* Show interactive preview on hover for AI-generated materials */}
+                {hoveredCardId === material.id && material.thumbnail && (
+                  <HoverPreview
+                    type={material.type}
+                    fileUrl={material.thumbnail}
+                    isHovered={true}
+                    className="z-10"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20" />
+              </div>
+
+              {/* Content */}
+              <div className="p-4 space-y-3">
+                <div className="space-y-2">
+                  {editingId === material.id ? (
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        className="h-8 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEdit(material.id, e as any);
+                          if (e.key === 'Escape') cancelEdit(e as any);
+                        }}
+                      />
+                      <Button size="sm" variant="ghost" onClick={(e) => saveEdit(material.id, e)}>
+                        <Check className="h-3 w-3" />
                       </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEdit}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-base line-clamp-2 group-hover:text-primary transition-colors flex-1">
+                        {material.name}
+                      </h4>
+                      {canEdit(material) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => startEditing(material, e)}
+                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {material.caption && (
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {material.caption}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    {material.company && (
+                      <span className="font-medium truncate">{material.company}</span>
+                    )}
+                    {material.project && (
+                      <span className="text-xs truncate">{material.project}</span>
                     )}
                   </div>
-                )}
-                {material.caption && (
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {material.caption}
-                  </p>
-                )}
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  {material.company && (
-                    <span className="font-medium truncate">{material.company}</span>
-                  )}
-                  {material.project && (
-                    <span className="text-xs truncate">{material.project}</span>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                  <StatusBadge status={material.status} isRunning={material.is_running} />
+                  {material.comments > 0 && (
+                    <div className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-primary transition-colors">
+                      <MessageSquare className="h-4 w-4" />
+                      <span>{material.comments}</span>
+                    </div>
                   )}
                 </div>
               </div>
-              
-              <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                <StatusBadge status={material.status} isRunning={material.is_running} />
-                {material.comments > 0 && (
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground hover:text-primary transition-colors">
-                    <MessageSquare className="h-4 w-4" />
-                    <span>{material.comments}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </Tilt>
       ))}
     </div>
   );
