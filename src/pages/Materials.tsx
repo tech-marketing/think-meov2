@@ -126,6 +126,7 @@ const Materials = () => {
           status: material.status as 'approved' | 'pending' | 'needs_adjustment' | 'rejected',
           comments: 0, // Pode ser implementado depois contando os comments
           thumbnail: material.thumbnail_url || material.file_url, // Priorizar thumbnail_url
+          file_url: material.file_url,
           project: material.projects?.name || 'Projeto não encontrado',
           company: material.projects?.companies?.name || 'Empresa não encontrada',
           is_running: material.is_running ?? true
