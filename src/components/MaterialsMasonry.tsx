@@ -5,6 +5,7 @@ import { MessageSquare, Calendar, User, ImageOff, LayoutGrid } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Tilt } from "./Tilt";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Material {
   id: string;
@@ -30,8 +31,64 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
   const [isHovered, setIsHovered] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [carouselImages, setCarouselImages] = useState<string[]>([]);
+  const [resolvedFileUrl, setResolvedFileUrl] = useState<string | null>(null);
 
   console.log('MaterialCard data:', { id: material.id, name: material.name, type: material.type, thumbnail: material.thumbnail, file_url: material.file_url });
+
+  // URL resolution logic - same as MaterialViewer
+  useEffect(() => {
+    if (material.file_url) {
+      // Check if it's a JSON array (carousel)
+      try {
+        if (material.file_url.startsWith('[') && material.file_url.endsWith(']')) {
+          const parsedFiles = JSON.parse(material.file_url);
+          if (Array.isArray(parsedFiles) && parsedFiles.length > 0) {
+            // Use first file URL for resolved URL
+            setResolvedFileUrl(parsedFiles[0]?.url || material.file_url);
+            return;
+          }
+        }
+      } catch (e) {
+        // Not JSON, continue
+      }
+
+      // If it's Google Cloud Storage URL, use directly
+      if (material.file_url.includes('storage.googleapis.com')) {
+        setResolvedFileUrl(material.file_url);
+      } else if (material.file_url.includes('supabase.co/storage')) {
+        // Generate signed URL for Supabase storage
+        const generateSignedUrl = async () => {
+          try {
+            const urlParts = material.file_url!.split('/storage/v1/object/public/materials/');
+            if (urlParts.length < 2) {
+              console.error('Invalid file URL:', material.file_url);
+              return;
+            }
+            const filePath = urlParts[1];
+            const { data, error } = await supabase.storage
+              .from('materials')
+              .createSignedUrl(filePath, 3600);
+
+            if (error) {
+              console.error('Error generating signed URL:', error);
+              return;
+            }
+            setResolvedFileUrl(data.signedUrl);
+          } catch (error) {
+            console.error('Error processing file URL:', error);
+          }
+        };
+        generateSignedUrl();
+      } else {
+        // Use file_url directly if it doesn't match known patterns
+        setResolvedFileUrl(material.file_url);
+      }
+    } else if (material.thumbnail) {
+      // Fallback to thumbnail
+      setResolvedFileUrl(material.thumbnail);
+    }
+  }, [material.file_url, material.thumbnail]);
+
 
   useEffect(() => {
     if (material.type === 'carousel' && material.file_url) {
@@ -74,12 +131,14 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
   }, [isHovered, material.type, carouselImages.length]);
 
   const renderPreview = () => {
+    const urlToUse = resolvedFileUrl || material.thumbnail || material.file_url;
+
     // Video Hover
-    if (material.type === 'video' && isHovered && material.file_url) {
+    if (material.type === 'video' && isHovered && urlToUse) {
       return (
         <div className="absolute inset-0 bg-black">
           <video
-            src={material.file_url}
+            src={urlToUse}
             className="w-full h-full object-cover"
             autoPlay
             muted
@@ -107,15 +166,15 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
     }
 
     // Default Thumbnail / Image
-    if (material.thumbnail || material.file_url) {
-      const isVideo = material.type === 'video' || (material.file_url && /\.(mp4|mov|webm|avi)/i.test(material.file_url));
+    if (urlToUse) {
+      const isVideo = material.type === 'video' || (urlToUse && /\.(mp4|mov|webm|avi)/i.test(urlToUse));
       // If it's a video and we don't have a separate thumbnail (or thumbnail is the video url), 
       // render a video element to show the first frame
       if (isVideo && (!material.thumbnail || material.thumbnail === material.file_url)) {
         return (
           <div className="relative w-full h-full bg-black">
             <video
-              src={material.file_url}
+              src={urlToUse}
               className="w-full h-full object-cover"
               preload="metadata"
               muted
@@ -133,21 +192,9 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
       }
 
       // Handle Carousel Default View (show first image)
-      let displayImage = material.thumbnail || material.file_url;
+      let displayImage = urlToUse;
       if (material.type === 'carousel' && carouselImages.length > 0) {
         displayImage = carouselImages[0];
-      } else if (material.type === 'carousel' && material.file_url) {
-        // Try to parse if it's a JSON string and we haven't processed it yet
-        try {
-          if (material.file_url.startsWith('[') && material.file_url.endsWith(']')) {
-            const parsed = JSON.parse(material.file_url);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              displayImage = parsed[0].url || parsed[0]; // Handle object with url prop or string
-            }
-          }
-        } catch (e) {
-          // ignore
-        }
       }
 
       return (
@@ -156,6 +203,10 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
             src={displayImage}
             alt={material.name}
             className="w-full h-full object-cover"
+            onError={(e) => {
+              console.error('Error loading image:', displayImage);
+              e.currentTarget.style.display = 'none';
+            }}
           />
           {material.type === 'video' && !isHovered && (
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
