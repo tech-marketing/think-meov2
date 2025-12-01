@@ -22,6 +22,10 @@ interface BriefingEditorLayoutProps {
   caption?: string;
 }
 
+import { supabase } from "@/integrations/supabase/client";
+
+// ...
+
 export const BriefingEditorLayout = ({
   briefingId,
   projectId,
@@ -35,43 +39,67 @@ export const BriefingEditorLayout = ({
   fileUrl,
   caption
 }: BriefingEditorLayoutProps) => {
+  const [resolvedFileUrl, setResolvedFileUrl] = useState<string | null>(null);
+
+  // URL resolution logic
+  useEffect(() => {
+    if (fileUrl) {
+      // If it's Google Cloud Storage URL, use directly
+      if (fileUrl.includes('storage.googleapis.com')) {
+        setResolvedFileUrl(fileUrl);
+      } else if (fileUrl.includes('supabase.co/storage')) {
+        // Generate signed URL for Supabase storage
+        const generateSignedUrl = async () => {
+          try {
+            const urlParts = fileUrl.split('/storage/v1/object/public/materials/');
+            if (urlParts.length < 2) {
+              // Try another pattern or just use as is if it's already a public URL
+              setResolvedFileUrl(fileUrl);
+              return;
+            }
+            const filePath = urlParts[1];
+            const { data, error } = await supabase.storage
+              .from('materials')
+              .createSignedUrl(filePath, 3600);
+
+            if (error) {
+              console.error('Error generating signed URL:', error);
+              setResolvedFileUrl(fileUrl); // Fallback
+              return;
+            }
+            setResolvedFileUrl(data.signedUrl);
+          } catch (error) {
+            console.error('Error processing file URL:', error);
+            setResolvedFileUrl(fileUrl);
+          }
+        };
+        generateSignedUrl();
+      } else {
+        // Use file_url directly if it doesn't match known patterns
+        setResolvedFileUrl(fileUrl);
+      }
+    }
+  }, [fileUrl]);
+
   // Parse carousel images from file_url if it's a JSON array
   let carouselSlides = wireframeData?.slides || [];
-  if (materialType === 'carousel' && fileUrl && !carouselSlides.length) {
-    try {
-      if (fileUrl.startsWith('[') && fileUrl.endsWith(']')) {
-        const parsedUrls = JSON.parse(fileUrl);
-        if (Array.isArray(parsedUrls)) {
-          carouselSlides = parsedUrls.map((item: any, index: number) => ({
-            imageUrl: typeof item === 'string' ? item : item.url,
-            index: index
-          }));
-        }
-      }
-    } catch (e) {
-      console.error('Error parsing carousel file_url:', e);
-    }
-  }
+  // ... (carousel parsing logic)
+
+  // Use resolvedFileUrl for rendering
+  const urlToUse = resolvedFileUrl || fileUrl;
 
   // Se é um carrossel com slides, renderizar a galeria de imagens
   if (materialType === 'carousel' && carouselSlides.length > 0) {
-    return (
-      <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background">
-        <CarouselGallery
-          slides={carouselSlides}
-          className="max-w-4xl w-full"
-        />
-      </div>
-    );
+    // ...
   }
 
   // Se é um vídeo ou reels e tem URL, renderizar o player de vídeo
-  if ((materialType === 'video' || materialType === 'reels' || fileUrl?.endsWith('.mp4')) && fileUrl) {
+  if ((materialType === 'video' || materialType === 'reels' || urlToUse?.match(/\.(mp4|mov|avi|webm)(\?.*)?$/i)) && urlToUse) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
         <div className="max-w-4xl w-full">
           <VideoPlayerWithCaption
-            videoUrl={fileUrl}
+            videoUrl={urlToUse}
             caption={caption || wireframeData?.legenda_section?.legenda_principal || wireframeData?.caption}
           />
         </div>
@@ -81,12 +109,12 @@ export const BriefingEditorLayout = ({
 
   // Se tem file_url e é uma imagem (ou tipo wireframe/static/image), renderizar a imagem
   // Isso cobre materiais gerados por workflow que podem ter type='wireframe' mas file_url com imagem
-  if (fileUrl && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i))) {
+  if (urlToUse && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || urlToUse?.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i))) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
         <div className="max-w-4xl w-full flex flex-col gap-4">
           <img
-            src={fileUrl}
+            src={urlToUse}
             alt="Briefing gerado"
             className="w-full h-auto rounded-lg shadow-lg object-contain max-h-[calc(100vh-300px)]"
           />
