@@ -109,7 +109,8 @@ export const BriefingEditorLayout = ({
 
   // Se tem file_url e é uma imagem (ou tipo wireframe/static/image), renderizar a imagem
   // Isso cobre materiais gerados por workflow que podem ter type='wireframe' mas file_url com imagem
-  if (urlToUse && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || urlToUse?.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i))) {
+  // Fallback: se tem URL e não caiu nos casos anteriores (video/carousel), tenta renderizar como imagem
+  if (urlToUse && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || true)) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
         <div className="max-w-4xl w-full flex flex-col gap-4">
@@ -117,6 +118,10 @@ export const BriefingEditorLayout = ({
             src={urlToUse}
             alt="Briefing gerado"
             className="w-full h-auto rounded-lg shadow-lg object-contain max-h-[calc(100vh-300px)]"
+            onError={(e) => {
+              console.error('Error loading image:', urlToUse);
+              e.currentTarget.style.display = 'none';
+            }}
           />
           {(caption || wireframeData?.legenda_section?.legenda_principal || wireframeData?.caption) && (
             <div className="p-6 bg-card rounded-lg border shadow-sm">
@@ -148,17 +153,6 @@ export const BriefingEditorLayout = ({
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(visualizationContent) }}
         />
       )}
-
-      {/* Debug Info - Temporary */}
-      <div className="p-4 bg-gray-100 border-t text-xs font-mono overflow-auto max-h-40">
-        <p className="font-bold">Debug Info:</p>
-        <p>Material Type: {materialType}</p>
-        <p>File URL: {fileUrl || 'None'}</p>
-        <p>Resolved URL: {resolvedFileUrl || 'None'}</p>
-        <p>Has Wireframe Data: {wireframeData ? 'Yes' : 'No'}</p>
-        <p>Carousel Slides: {carouselSlides.length}</p>
-        <p>Regex Match: {urlToUse?.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) ? 'Yes' : 'No'}</p>
-      </div>
     </div>
   );
 };
