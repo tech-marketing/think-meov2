@@ -18,10 +18,10 @@ import { ChangeMaterialModal } from "./ChangeMaterialModal";
 import { MaterialVersionsModal } from "./MaterialVersionsModal";
 import { WireframeViewer } from "./WireframeViewer";
 import { WireframeEditor } from "./WireframeEditor";
-import { WireframePreview } from "./WireframePreview";
-import { WireframeHTMLPreview } from "./WireframeHTMLPreview";
-import { CommentWithMentions } from "./CommentWithMentions";
+import { WireframePreview } from './WireframePreview';
+import { WireframeHTMLPreview } from './WireframeHTMLPreview';
 import { VideoGenerationProgress } from "./VideoGenerationProgress";
+import { CommentWithMentions } from "./CommentWithMentions";
 import { VideoPlayerWithCaption } from "./VideoPlayerWithCaption";
 interface Comment {
   id: string;
@@ -734,6 +734,26 @@ export const MaterialViewer = ({
           return <div className="w-full">
             <WireframeHTMLPreview wireframe_data={wireframeToRender} className="min-h-[500px]" />
           </div>;
+        }
+
+        // Check if we have a full wireframe layout (with elements)
+        const hasWireframeElements = wireframeToRender?.wireframe?.elements?.length > 0 || wireframeToRender?.elements?.length > 0;
+
+        // Normalize wireframe data for Editor if needed
+        const editorWireframe = wireframeToRender?.wireframe || wireframeToRender;
+
+        if (hasWireframeElements) {
+          return (
+            <div className="w-full h-full bg-gray-100 flex items-center justify-center p-4 overflow-hidden min-h-[600px]">
+              <div className="w-full h-full max-w-5xl max-h-[800px] bg-white shadow-lg rounded-lg overflow-hidden">
+                <WireframeEditor
+                  wireframe={editorWireframe}
+                  readOnly={true}
+                  className="w-full h-full"
+                />
+              </div>
+            </div>
+          );
         }
 
         // Caso contrário, mostrar a pré-visualização simples
