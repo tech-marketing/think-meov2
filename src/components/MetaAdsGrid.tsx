@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Eye, TrendingUp, MousePointer, DollarSign, Target, Play, Image as ImageIcon, Brain, Loader2, Plus, AlertTriangle, Search, Settings, CheckCircle, Sparkles, Video, LayoutGrid } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { CreativeDisplay } from "./CreativeDisplay";
 import { CreateProjectModal } from "./CreateProjectModal";
@@ -704,7 +705,7 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
       // Find a default project or use the first active project
       const {
         data: projectsData
-      } = await supabase.from('projects').select('id, name').eq('status', 'active').order('name').limit(1);
+      } = await supabase.from('projects').select('id, name, company_id').eq('status', 'active').order('name').limit(1);
       if (!projectsData || projectsData.length === 0) {
         toast({
           title: "Nenhum projeto encontrado",
@@ -713,22 +714,78 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
         });
         return;
       }
-      const defaultProject = projectsData[0].id;
+      const defaultProject = projectsData[0];
 
-      // Generate briefing with default project
+      // Get user profile for created_by
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Erro de autenticação",
+          description: "Usuário não autenticado",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profileData) {
+        toast({
+          title: "Erro",
+          description: "Perfil de usuário não encontrado",
+          variant: "destructive"
+        });
+        return;
+      }
+
       setGeneratingBriefing(ad.id);
 
       const formatLabel = targetFormat === 'carousel' ? 'carrossel' :
         targetFormat === 'video' ? 'vídeo' :
           'imagem estática';
 
+      // Create pending material first
+      const { data: pendingMaterial, error: createError } = await supabase
+        .from('materials')
+        .insert({
+          name: `${ad.ad_name} (Gerando...)`,
+          type: targetFormat || 'static',
+          status: 'processing',
+          is_briefing: true,
+          project_id: defaultProject.id,
+          company_id: defaultProject.company_id,
+          created_by: profileData.id
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating pending material:', createError);
+        toast({
+          title: "Erro",
+          description: "Não foi possível criar o briefing",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Navigate immediately to show the "Gerando..." state
+      navigate(`/briefing-editor/${pendingMaterial.id}`);
+
       toast({
         title: "Gerando briefing...",
-        description: `Criando ${formatLabel} baseado na análise. Aguarde um momento.`
+        description: `Criando ${formatLabel} baseado na análise. Você pode navegar livremente.`
       });
 
-      // Combinar ambas análises em uma string
-      const combinedAnalysis = analysisResults[ad.id].marketTrends ? `${analysisResults[ad.id].performance}\n\n---\n\n## Tendências de Mercado\n\n${analysisResults[ad.id].marketTrends}` : analysisResults[ad.id].performance;
+      // Call generate-briefing in background to update the material
+      const combinedAnalysis = analysisResults[ad.id].marketTrends
+        ? `${analysisResults[ad.id].performance}\n\n---\n\n## Tendências de Mercado\n\n${analysisResults[ad.id].marketTrends}`
+        : analysisResults[ad.id].performance;
+
       const {
         data,
         error
@@ -736,26 +793,20 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
         body: {
           adId: ad.ad_id,
           accountId: selectedAccount,
-          projectId: defaultProject,
+          projectId: defaultProject.id,
           creativeAnalysis: combinedAnalysis,
           adName: ad.ad_name,
           materialCaption: materialCaption[ad.id],
           materialFileUrl: ad.image_url || ad.video_url,
           competitorAds: competitorAds || [],
-          targetFormat: targetFormat || 'static'
+          targetFormat: targetFormat || 'static',
+          materialId: pendingMaterial.id // Pass the ID to update existing material
         }
       });
-      if (error) throw error;
-      if (data?.success) {
-        toast({
-          title: "Redirecionando para o editor",
-          description: "Abrindo o editor de wireframe..."
-        });
-        if (data.briefing?.id) {
-          navigate(`/briefing-editor/${data.briefing.id}`);
-        }
-      } else {
-        throw new Error(data?.error || 'Erro desconhecido na geração');
+
+      if (error) {
+        console.error('Error generating briefing:', error);
+        // Material will stay in "processing" state - user can see error in the editor
       }
     } catch (error) {
       console.error('Erro ao gerar briefing:', error);

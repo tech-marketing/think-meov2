@@ -55,7 +55,8 @@ serve(async (req) => {
       materialFileUrl,
       competitorAds,
       simpleOutput = false,
-      targetFormat = 'static' // Formato do criativo: 'static', 'carousel', 'video'
+      targetFormat = 'static', // Formato do criativo: 'static', 'carousel', 'video'
+      materialId: providedMaterialId // ID do material já criado (opcional)
     } = await req.json();
 
     console.log('🔧 Dados recebidos:', {
@@ -1069,7 +1070,7 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
     console.log('Wireframe generated for ad:', adId);
 
     // Transformar o wireframe em material completo baseado no formato
-    let materialId: string;
+    let materialId: string = providedMaterialId || '';
     let materialStatus = 'approved';
 
     if (targetFormat === 'carousel') {
@@ -1086,38 +1087,52 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
 
       console.log(`✅ Carrossel gerado com ${slides.length} slides`);
 
-      // Salvar em materials com wireframe_data
-      const { data: material, error: insertError } = await supabaseAdmin
-        .from('materials')
-        .insert({
-          name: `Carrossel - Baseado em ${adName}`,
-          type: 'carousel',
-          is_briefing: true,
-          project_id: projectId,
-          company_id: companyIdToUse,
-          created_by: profile.id,
-          canvas_data: null,
-          caption: caption,
-          file_url: imageUrls[0],
-          wireframe_data: {
-            isCarousel: true,
-            slides: slides
-          },
-          metadata: {
-            source_ad: adId,
-            briefing_data: wireframeData
-          },
-          status: materialStatus
-        })
-        .select()
-        .single();
+      const materialData = {
+        name: `Carrossel - Baseado em ${adName}`,
+        type: 'carousel' as const,
+        is_briefing: true,
+        project_id: projectId,
+        company_id: companyIdToUse,
+        created_by: profile.id,
+        canvas_data: null,
+        caption: caption,
+        file_url: imageUrls[0],
+        wireframe_data: {
+          isCarousel: true,
+          slides: slides
+        },
+        metadata: {
+          source_ad: adId,
+          briefing_data: wireframeData
+        },
+        status: materialStatus
+      };
 
-      if (insertError) {
-        console.error('Error creating carousel material:', insertError);
-        throw insertError;
+      // Salvar ou atualizar em materials
+      if (providedMaterialId) {
+        const { error: updateError } = await supabaseAdmin
+          .from('materials')
+          .update(materialData)
+          .eq('id', providedMaterialId);
+
+        if (updateError) {
+          console.error('Error updating carousel material:', updateError);
+          throw updateError;
+        }
+        materialId = providedMaterialId;
+      } else {
+        const { data: material, error: insertError } = await supabaseAdmin
+          .from('materials')
+          .insert(materialData)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating carousel material:', insertError);
+          throw insertError;
+        }
+        materialId = material.id;
       }
-
-      materialId = material.id;
 
     } else if (targetFormat === 'video') {
       console.log('🎥 Iniciando geração de vídeo...');
@@ -1146,37 +1161,51 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
         wireframeData.legenda_section?.legenda_principal || ''
       );
 
-      // Salvar em materials com status processing
-      const { data: material, error: insertError } = await supabaseAdmin
-        .from('materials')
-        .insert({
-          name: `Vídeo - Baseado em ${adName}`,
-          type: 'video',
-          is_briefing: true,
-          project_id: projectId,
-          company_id: companyIdToUse,
-          created_by: profile.id,
-          status: 'processing',
-          canvas_data: canvasData,
-          caption: wireframeData.legenda_section?.legenda_principal,
-          metadata: {
-            veo_operation_name: veoOperation.name,
-            storyboard: wireframeData.wireframe.storyboard,
-            video_prompt: videoPrompt,
-            source_ad: adId,
-            briefing_data: wireframeData,
-            ai_generated_video: true
-          }
-        })
-        .select()
-        .single();
+      const materialData = {
+        name: `Vídeo - Baseado em ${adName}`,
+        type: 'video' as const,
+        is_briefing: true,
+        project_id: projectId,
+        company_id: companyIdToUse,
+        created_by: profile.id,
+        status: 'processing' as const,
+        canvas_data: canvasData,
+        caption: wireframeData.legenda_section?.legenda_principal,
+        metadata: {
+          veo_operation_name: veoOperation.name,
+          storyboard: wireframeData.wireframe.storyboard,
+          video_prompt: videoPrompt,
+          source_ad: adId,
+          briefing_data: wireframeData,
+          ai_generated_video: true
+        }
+      };
 
-      if (insertError) {
-        console.error('Error creating video material:', insertError);
-        throw insertError;
+      // Salvar ou atualizar em materials
+      if (providedMaterialId) {
+        const { error: updateError } = await supabaseAdmin
+          .from('materials')
+          .update(materialData)
+          .eq('id', providedMaterialId);
+
+        if (updateError) {
+          console.error('Error updating video material:', updateError);
+          throw updateError;
+        }
+        materialId = providedMaterialId;
+      } else {
+        const { data: material, error: insertError } = await supabaseAdmin
+          .from('materials')
+          .insert(materialData)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating video material:', insertError);
+          throw insertError;
+        }
+        materialId = material.id;
       }
-
-      materialId = material.id;
       materialStatus = 'processing';
 
     } else if (targetFormat === 'static') {
@@ -1187,35 +1216,49 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
 
       console.log('✅ Canvas estático gerado');
 
-      // Salvar em materials com canvas_data
-      const { data: material, error: insertError } = await supabaseAdmin
-        .from('materials')
-        .insert({
-          name: `Imagem Estática - Baseado em ${adName}`,
-          type: 'static',
-          is_briefing: true,
-          project_id: projectId,
-          company_id: companyIdToUse,
-          created_by: profile.id,
-          canvas_data: canvasData,
-          caption: wireframeData.legenda_section?.legenda_principal,
-          file_url: null,
-          wireframe_data: wireframeData.wireframe,
-          metadata: {
-            source_ad: adId,
-            briefing_data: wireframeData
-          },
-          status: materialStatus
-        })
-        .select()
-        .single();
+      const materialData = {
+        name: `Imagem Estática - Baseado em ${adName}`,
+        type: 'static' as const,
+        is_briefing: true,
+        project_id: projectId,
+        company_id: companyIdToUse,
+        created_by: profile.id,
+        canvas_data: canvasData,
+        caption: wireframeData.legenda_section?.legenda_principal,
+        file_url: null,
+        wireframe_data: wireframeData.wireframe,
+        metadata: {
+          source_ad: adId,
+          briefing_data: wireframeData
+        },
+        status: materialStatus
+      };
 
-      if (insertError) {
-        console.error('Error creating static material:', insertError);
-        throw insertError;
+      // Salvar ou atualizar em materials
+      if (providedMaterialId) {
+        const { error: updateError } = await supabaseAdmin
+          .from('materials')
+          .update(materialData)
+          .eq('id', providedMaterialId);
+
+        if (updateError) {
+          console.error('Error updating static material:', updateError);
+          throw updateError;
+        }
+        materialId = providedMaterialId;
+      } else {
+        const { data: material, error: insertError } = await supabaseAdmin
+          .from('materials')
+          .insert(materialData)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating static material:', insertError);
+          throw insertError;
+        }
+        materialId = material.id;
       }
-
-      materialId = material.id;
     } else {
       throw new Error(`Formato não suportado: ${targetFormat}`);
     }
@@ -1226,6 +1269,7 @@ Focalize em um wireframe prático que a equipe criativa possa implementar direta
       JSON.stringify({
         success: true,
         materialId: materialId,
+        briefing: { id: materialId }, // For backward compatibility
         status: materialStatus,
         format: targetFormat
       }),

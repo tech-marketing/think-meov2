@@ -37,6 +37,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
+  const [targetSection, setTargetSection] = useState<'materials' | 'briefings'>('materials');
   const [materialName, setMaterialName] = useState("");
   const [description, setDescription] = useState("");
   const [reference, setReference] = useState("");
@@ -54,6 +55,21 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   const [userRole, setUserRole] = useState<string | null>(null);
   const { profile } = useAuth();
   const { toast } = useToast();
+
+  // Force Briefings section if wireframe data is present
+  useEffect(() => {
+    const hasWireframeData =
+      title.trim() ||
+      subtitle.trim() ||
+      cta.trim() ||
+      newsTitle.trim() ||
+      sourceLabel.trim() ||
+      cardText.trim();
+
+    if (hasWireframeData) {
+      setTargetSection('briefings');
+    }
+  }, [title, subtitle, cta, newsTitle, sourceLabel, cardText]);
 
   // Verificar role do usuário no projeto selecionado
   const checkUserRoleInProject = async (projectId: string) => {
@@ -240,34 +256,29 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       if (projectError) throw projectError;
 
       // Se há dados de wireframe (sem arquivos), criar material wireframe
-      if ((title.trim() || subtitle.trim() || cta.trim() || newsTitle.trim() || cardText.trim()) && files.length === 0) {
+      if (hasWireframeData && files.length === 0) {
         // Gerar wireframe baseado no tipo de layout selecionado
         let wireframeData: any = null;
         let canvasData: string | null = null;
 
         if (layoutType === 'news') {
-          // Novo formato: usar Canvas do Fabric.js
           const canvasJson = createNewsLayoutCanvas(newsTitle.trim() || 'Texto da notícia');
           canvasData = JSON.stringify(canvasJson);
-          // Não usar wireframe_data para layouts news
         } else if (layoutType === 'card') {
-          // Novo formato: usar Canvas do Fabric.js para layout de card
           const canvasJson = createCardLayoutCanvas(
             cardText.trim() || 'Texto',
             cta.trim() || 'CTA'
           );
           canvasData = JSON.stringify(canvasJson);
-          // Não usar wireframe_data para layouts card
         } else {
-          // Layout padrão com Canvas do Fabric.js
           const canvasJson = createDefaultLayoutCanvas(
             title.trim() || 'Texto',
             cta.trim() || 'CTA'
           );
           canvasData = JSON.stringify(canvasJson);
-          // Não usar wireframe_data para layouts default
         }
 
+        // Ensure is_briefing is true for wireframes
         const { error: materialError } = await supabase
           .from("materials")
           .insert({
@@ -283,7 +294,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             reference: reference.trim() || null,
             file_url: null,
             thumbnail_url: null,
-            is_briefing: true,
+            is_briefing: true, // Always true for wireframes
             briefing_approved_by_client: false,
             is_running: isRunning,
           });
@@ -330,7 +341,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           }
 
           fileUrls.push({
-            url: uploadResult.path, // URL do GCS
+            url: uploadResult.path,
             name: file.name,
             type: type
           });
@@ -350,7 +361,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             reference: reference.trim() || null,
             file_url: files.length > 1 ? JSON.stringify(fileUrls) : fileUrls[0].url, // JSON para carrossel, URL única para arquivo único
             thumbnail_url: null, // Será gerada separadamente se necessário
-            is_briefing: false,
+            is_briefing: targetSection === 'briefings', // Use selected section
             briefing_approved_by_client: false,
             is_running: isRunning,
           });
@@ -378,6 +389,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       setSourceLabel("");
       setCardText("");
       setIsRunning(true);
+      setTargetSection('materials');
 
       onOpenChange(false);
 
@@ -438,28 +450,52 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
         <div className="flex-1 overflow-y-auto pr-2">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Project Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="project">Escolher Projeto *</Label>
-              <Select value={selectedProject} onValueChange={setSelectedProject} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o projeto" />
-                </SelectTrigger>
-                <SelectContent className="bg-background border z-50">
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{project.name}</span>
-                        <span className="text-xs text-muted-foreground">{project.company_name}</span>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="project">Escolher Projeto *</Label>
+                <Select value={selectedProject} onValueChange={setSelectedProject} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o projeto" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border z-50">
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{project.name}</span>
+                          <span className="text-xs text-muted-foreground">{project.company_name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="section">Seção de Destino *</Label>
+                <Select
+                  value={targetSection}
+                  onValueChange={(value: 'materials' | 'briefings') => setTargetSection(value)}
+                  disabled={!!(title.trim() || subtitle.trim() || cta.trim() || newsTitle.trim() || sourceLabel.trim() || cardText.trim())}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a seção" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border z-50">
+                    <SelectItem value="materials">
+                      <div className="flex items-center gap-2">
+                        <Image className="h-4 w-4" />
+                        <span>Materiais</span>
                       </div>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {projects.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Nenhum projeto ativo encontrado. Crie um projeto primeiro.
-                </p>
-              )}
+                    <SelectItem value="briefings">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        <span>Briefings</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Material Info */}
