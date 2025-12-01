@@ -172,7 +172,7 @@ const ProjectView = () => {
       // Processar materiais
       const processedMaterials: Material[] = (materialsData || []).map(material => {
         // Priorizar o tipo do banco, usar detecção como fallback
-        let materialType: 'image' | 'video' | 'pdf' | 'wireframe' = material.type as Material['type'] || 'image';
+        let materialType: 'image' | 'video' | 'pdf' | 'wireframe' | 'carousel' = material.type as Material['type'] || 'image';
 
         // Map legacy 'copy' type to 'wireframe'
         if (material.type === 'copy') {
@@ -206,7 +206,10 @@ const ProjectView = () => {
           status: material.status as Material['status'],
           comments: 0, // TODO: contar comentários
           thumbnail: material.thumbnail_url,
-          is_running: material.is_running ?? true
+          file_url: material.file_url,
+          is_running: material.is_running ?? true,
+          project: projectData.name,
+          company: projectData.companies?.name
         };
       });
 
