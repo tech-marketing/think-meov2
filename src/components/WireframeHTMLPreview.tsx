@@ -56,68 +56,53 @@ export const WireframeHTMLPreview: React.FC<WireframeHTMLPreviewProps> = ({ wire
   }
 
   const getLogoPosition = () => {
-    switch (wireframe_data.logo.position) {
-      case 'top-left':
-        return 'justify-start';
-      case 'top-right':
-        return 'justify-end';
-      case 'top-center':
-      default:
-        return 'justify-center';
-    }
+    return wireframe_data.logo?.position === 'top-left' ? 'justify-start' :
+      wireframe_data.logo?.position === 'top-right' ? 'justify-end' :
+        'justify-center';
   };
 
   const getLogoSize = () => {
-    switch (wireframe_data.logo.size) {
-      case 'small':
-        return 'w-16 h-10';
-      case 'large':
-        return 'w-24 h-16';
-      case 'medium':
-      default:
-        return 'w-20 h-12';
-    }
+    return wireframe_data.logo?.size === 'small' ? 'w-16 h-10' :
+      wireframe_data.logo?.size === 'large' ? 'w-24 h-16' :
+        'w-20 h-12';
   };
 
   const getTitleWeight = () => {
-    switch (wireframe_data.title.font_weight) {
-      case 'normal':
-        return 'font-normal';
-      case 'semibold':
-        return 'font-semibold';
-      case 'bold':
-      default:
-        return 'font-bold';
-    }
+    return wireframe_data.title?.font_weight === 'normal' ? 'font-normal' :
+      wireframe_data.title?.font_weight === 'semibold' ? 'font-semibold' :
+        'font-bold';
   };
 
   const getSubtitleWeight = () => {
-    switch (wireframe_data.subtitle.font_weight) {
-      case 'normal':
-        return 'font-normal';
-      case 'bold':
-        return 'font-bold';
-      case 'semibold':
-      default:
-        return 'font-semibold';
-    }
+    return wireframe_data.subtitle?.font_weight === 'bold' ? 'font-bold' :
+      wireframe_data.subtitle?.font_weight === 'normal' ? 'font-normal' :
+        'font-semibold';
   };
 
   const getCTAAlignment = () => {
-    switch (wireframe_data.cta.align) {
-      case 'left':
-        return 'justify-start';
-      case 'right':
-        return 'justify-end';
-      case 'center':
-      default:
-        return 'justify-center';
-    }
+    return wireframe_data.cta?.align === 'left' ? 'justify-start' :
+      wireframe_data.cta?.align === 'right' ? 'justify-end' :
+        'justify-center';
   };
 
   const getSeparatorWidth = () => {
-    return `${wireframe_data.separator.width_percent}%`;
+    return `${wireframe_data.separator?.width_percent || 50}%`;
   };
+
+  // Helper to safely get text content
+  const getText = (field: any) => {
+    if (!field) return '';
+    if (typeof field === 'string') return field;
+    return field.text || field.label || '';
+  };
+
+  const titleText = getText(wireframe_data.title);
+  const subtitleText = getText(wireframe_data.subtitle);
+  const ctaLabel = getText(wireframe_data.cta);
+  const personaLabel = getText(wireframe_data.persona_product);
+  const personaBgColor = wireframe_data.persona_product?.bg_color || '#e5e7eb';
+  const separatorVisible = wireframe_data.separator?.visible ?? true;
+  const objectiveMapped = wireframe_data.cta?.objective_mapped || 'Conversão';
 
   return (
     <Card className={`bg-gradient-to-br from-white to-gray-50 shadow-xl border-0 overflow-hidden ${className}`}>
@@ -128,9 +113,9 @@ export const WireframeHTMLPreview: React.FC<WireframeHTMLPreviewProps> = ({ wire
           <div className="absolute inset-0 opacity-5">
             <svg className="w-full h-full" fill="currentColor" viewBox="0 0 100 100">
               <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.5"/>
+                <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.5" />
               </pattern>
-              <rect width="100" height="100" fill="url(#grid)"/>
+              <rect width="100" height="100" fill="url(#grid)" />
             </svg>
           </div>
 
@@ -145,47 +130,47 @@ export const WireframeHTMLPreview: React.FC<WireframeHTMLPreviewProps> = ({ wire
             {/* Title */}
             <div className="text-center mb-6">
               <h1 className={`text-3xl lg:text-4xl ${getTitleWeight()} text-gray-900 leading-tight max-w-4xl mx-auto`}>
-                {wireframe_data.title.text}
+                {titleText}
               </h1>
             </div>
 
             {/* Subtitle */}
             <div className="text-center mb-8">
               <p className={`text-lg lg:text-xl ${getSubtitleWeight()} text-gray-700 leading-relaxed max-w-3xl mx-auto`}>
-                {wireframe_data.subtitle.text}
+                {subtitleText}
               </p>
             </div>
 
             {/* Persona/Product Tag */}
             <div className="flex justify-center mb-8">
-              <div 
+              <div
                 className="inline-flex items-center px-6 py-3 rounded-full text-sm font-semibold text-gray-900 shadow-lg"
-                style={{ backgroundColor: wireframe_data.persona_product.bg_color }}
+                style={{ backgroundColor: personaBgColor }}
               >
                 <span className="uppercase tracking-wide">
-                  {wireframe_data.persona_product.label}
+                  {personaLabel}
                 </span>
               </div>
             </div>
 
             {/* Separator */}
-            {wireframe_data.separator.visible && (
+            {separatorVisible && (
               <div className="flex justify-center mb-8">
-                <hr 
-                  className="border-2 border-gradient-to-r from-blue-400 to-purple-400 rounded-full" 
-                  style={{ width: getSeparatorWidth() }} 
+                <hr
+                  className="border-2 border-gradient-to-r from-blue-400 to-purple-400 rounded-full"
+                  style={{ width: getSeparatorWidth() }}
                 />
               </div>
             )}
 
             {/* CTA Button */}
             <div className={`flex ${getCTAAlignment()}`}>
-              <button 
+              <button
                 className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-4 px-8 rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none focus:ring-4 focus:ring-blue-300"
                 disabled
               >
                 <span className="relative z-10 uppercase tracking-wide text-sm">
-                  {wireframe_data.cta.label}
+                  {ctaLabel}
                 </span>
                 {/* Efeito de brilho no hover */}
                 <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out"></div>
@@ -207,7 +192,7 @@ export const WireframeHTMLPreview: React.FC<WireframeHTMLPreviewProps> = ({ wire
               <span className="font-medium text-green-400">WIREFRAME APROVADO</span>
             </div>
             <div className="text-gray-400">
-              Objetivo: {wireframe_data.cta.objective_mapped}
+              Objetivo: {objectiveMapped}
             </div>
           </div>
         </div>
