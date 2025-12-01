@@ -19,7 +19,7 @@ interface BriefingMaterial {
   id: string;
   name: string;
   type: 'wireframe' | 'carousel' | 'video';
-  status: 'client_approval' | 'internal_approval' | 'pending' | 'approved' | 'needs_adjustment' | 'rejected';
+  status: 'client_approval' | 'internal_approval' | 'pending' | 'approved' | 'needs_adjustment' | 'rejected' | 'processing';
   comments: number;
   caption?: string;
   thumbnail?: string;
@@ -74,22 +74,43 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
         .from('materials')
         .select('id, name, type, status, caption, wireframe_data, briefing_approved_by_client, file_url, thumbnail_url')
         .eq('project_id', projectId)
-        .in('type', ['wireframe', 'carousel', 'video', 'image'])
+        .in('type', ['wireframe', 'carousel', 'video'])
         .eq('is_briefing', true)
         .eq('briefing_approved_by_client', false)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      const processedBriefings: BriefingMaterial[] = (briefingData || []).map(briefing => ({
-        id: briefing.id,
-        name: briefing.name,
-        type: briefing.type as BriefingMaterial['type'],
-        status: briefing.status as BriefingMaterial['status'],
-        comments: 0, // TODO: contar comentários
-        caption: briefing.caption || undefined,
-        thumbnail: briefing.thumbnail_url || briefing.file_url,
-      }));
+      const processedBriefings: BriefingMaterial[] = (briefingData || []).map(briefing => {
+        let thumbnail = briefing.thumbnail_url || briefing.file_url;
+
+        // Preferir o primeiro slide do carrossel como thumbnail
+        if (briefing.type === 'carousel') {
+          if (briefing.wireframe_data?.slides?.length > 0) {
+            thumbnail = briefing.wireframe_data.slides[0].imageUrl;
+          } else if (briefing.file_url) {
+            try {
+              const parsed = JSON.parse(briefing.file_url);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                thumbnail = parsed[0];
+              }
+            } catch {
+              // manter thumbnail existente
+            }
+          }
+        }
+
+        return {
+          id: briefing.id,
+          name: briefing.name,
+          type: briefing.type as BriefingMaterial['type'],
+          status: briefing.status as BriefingMaterial['status'],
+          comments: 0, // TODO: contar comentários
+          caption: briefing.caption || undefined,
+          thumbnail,
+          briefing_approved_by_client: briefing.briefing_approved_by_client
+        };
+      });
 
       setBriefings(processedBriefings);
       setFilteredBriefings(processedBriefings);

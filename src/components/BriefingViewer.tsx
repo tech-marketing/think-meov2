@@ -21,6 +21,8 @@ import { BriefingComments } from "@/components/BriefingComments";
 import { StatusBadge } from "@/components/StatusBadge";
 import { MentionInput } from "@/components/MentionInput";
 import { CarouselGallery } from "@/components/CarouselGallery";
+import { VideoPlayerWithCaption } from "@/components/VideoPlayerWithCaption";
+import { VideoGenerationProgress } from "@/components/VideoGenerationProgress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -577,43 +579,44 @@ export const BriefingViewer = ({
         )}
 
         {/* ========== VISUALIZAÇÃO DO BRIEFING ========== */}
-        {briefing.type === 'carousel' && briefing.wireframe_data?.slides ? (
-          // Carrossel - Mostrar galeria de imagens
-          <CarouselGallery slides={briefing.wireframe_data.slides} />
-        ) : briefing.status === 'approved' && briefing.canvas_data ? (
-          // Briefing aprovado - Mostrar thumbnail estática
-          <Card>
-            <CardHeader>
-              <h3 className="font-semibold">Visualização do Briefing Aprovado</h3>
-            </CardHeader>
-            <CardContent>
-              {briefing.thumbnail_url ? (
-                <div className="flex justify-center">
-                  <img 
-                    src={briefing.thumbnail_url} 
-                    alt="Preview do Briefing"
-                    className="max-w-full h-auto rounded-lg border-2 border-border shadow-lg"
-                  />
-                </div>
-              ) : (
-                <div className="flex justify-center items-center min-h-[400px] bg-muted rounded-lg">
-                  <div className="text-center space-y-2">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                    <p className="text-muted-foreground text-sm">Gerando visualização...</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          // Briefing não aprovado - Mostrar editor Canvas
-          <BriefingEditorLayout
-            briefingId={briefingId}
-            projectId={projectId}
-            visualizationContent={visualizationContent}
-            onVisualizationChange={handleVisualizationChange}
-          />
-        )}
+        {(() => {
+          if (briefing.type === 'carousel' && briefing.wireframe_data?.slides) {
+            return <CarouselGallery slides={briefing.wireframe_data.slides} />;
+          }
+
+          if (briefing.type === 'video' && briefing.status === 'processing') {
+            return <VideoGenerationProgress materialId={briefingId} projectId={projectId} />;
+          }
+
+          if (briefing.type === 'video' && briefing.file_url) {
+            return (
+              <VideoPlayerWithCaption
+                videoUrl={briefing.file_url}
+                caption={briefing.caption}
+                thumbnailUrl={briefing.thumbnail_url}
+              />
+            );
+          }
+
+          if (briefing.type === 'wireframe') {
+            return (
+              <BriefingEditorLayout
+                briefingId={briefingId}
+                projectId={projectId}
+                visualizationContent={visualizationContent}
+                onVisualizationChange={handleVisualizationChange}
+              />
+            );
+          }
+
+          return (
+            <Card>
+              <CardContent className="flex items-center justify-center min-h-[400px]">
+                <p className="text-muted-foreground">Conteúdo ainda não disponível.</p>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* ========== AÇÕES DE APROVAÇÃO ========== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
