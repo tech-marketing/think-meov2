@@ -773,12 +773,10 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
         return;
       }
 
-      // Navigate immediately to show the "Gerando..." state
-      navigate(`/briefing-editor/${pendingMaterial.id}`);
-
+      // Show toast - user stays on current page
       toast({
         title: "Gerando briefing...",
-        description: `Criando ${formatLabel} baseado na análise. Você pode navegar livremente.`
+        description: `Criando ${formatLabel} baseado na análise. O briefing aparecerá na seção Briefings quando estiver pronto.`
       });
 
       // Call generate-briefing in background to update the material

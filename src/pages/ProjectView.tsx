@@ -33,11 +33,15 @@ import { useMaterials } from "@/contexts/MaterialsContext";
 interface Material {
   id: string;
   name: string;
-  type: 'image' | 'video' | 'pdf' | 'wireframe';
-  status: 'approved' | 'pending' | 'needs_adjustment' | 'rejected' | 'client_approval' | 'internal_approval';
+  type: 'image' | 'video' | 'pdf' | 'wireframe' | 'carousel';
+  status: 'approved' | 'pending' | 'needs_adjustment' | 'rejected' | 'client_approval' | 'internal_approval' | 'processing' | 'failed';
   comments: number;
   thumbnail?: string;
+  file_url?: string;
+  project?: string;
+  company?: string;
   is_running?: boolean;
+  is_briefing?: boolean; // Added for briefings
 }
 
 interface Project {
@@ -54,6 +58,7 @@ type ViewMode = 'grid' | 'list';
 type FilterType = 'all' | 'image' | 'video' | 'pdf' | 'wireframe';
 type StatusFilter = 'all' | 'approved' | 'pending' | 'needs_adjustment' | 'rejected' | 'client_approval' | 'internal_approval';
 type RunningFilter = 'all' | 'running' | 'available';
+type SectionFilter = 'all' | 'materials' | 'briefings'; // Added for filtering materials vs briefings
 
 const ProjectView = () => {
   const { id } = useParams();
@@ -68,6 +73,7 @@ const ProjectView = () => {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runningFilter, setRunningFilter] = useState<RunningFilter>('all');
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all'); // Added for materials vs briefings
   const [showParticipants, setShowParticipants] = useState(true);
   const [activeSection, setActiveSection] = useState<'briefing' | 'briefing-approved' | 'materials'>('materials');
   const [briefingsApprovedCount, setBriefingsApprovedCount] = useState(0);
@@ -116,12 +122,11 @@ const ProjectView = () => {
         return;
       }
 
-      // Buscar materiais do projeto (apenas não-briefing para a seção materiais)
+      // Buscar materiais e briefings do projeto
       const { data: materialsData, error: materialsError } = await supabase
         .from('materials')
-        .select('id, name, type, status, file_url, thumbnail_url, is_running')
+        .select('id, name, type, status, file_url, thumbnail_url, is_running, is_briefing')
         .eq('project_id', id)
-        .eq('is_briefing', false)
         .order('created_at', { ascending: false });
 
       if (materialsError) throw materialsError;
@@ -271,6 +276,14 @@ const ProjectView = () => {
       const matchesSearch = material.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filterType === 'all' || material.type === filterType;
 
+      // Section filter (materials vs briefings)
+      let matchesSection = true;
+      if (sectionFilter === 'materials') {
+        matchesSection = !material.is_briefing;
+      } else if (sectionFilter === 'briefings') {
+        matchesSection = material.is_briefing === true;
+      }
+
       // Corrigir filtro de status para incluir tanto needs_adjustment quanto rejected
       let matchesStatus = statusFilter === 'all';
       if (statusFilter === 'needs_adjustment') {
@@ -287,10 +300,10 @@ const ProjectView = () => {
           : material.is_running === false;
       }
 
-      return matchesSearch && matchesFilter && matchesStatus && matchesRunning;
+      return matchesSearch && matchesFilter && matchesSection && matchesStatus && matchesRunning;
     });
     setFilteredMaterials(filtered);
-  }, [materials, searchTerm, filterType, statusFilter, runningFilter]);
+  }, [materials, searchTerm, filterType, sectionFilter, statusFilter, runningFilter]);
 
   const stats = {
     total: materials.length,
@@ -533,6 +546,33 @@ const ProjectView = () => {
                           <List className="h-4 w-4" />
                         </Button>
                       </div>
+                    </div>
+
+                    {/* Section Filter - Materials vs Briefings */}
+                    <div className="flex items-center gap-2 mb-4">
+                      <Button
+                        variant={sectionFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSectionFilter('all')}
+                      >
+                        Todos
+                      </Button>
+                      <Button
+                        variant={sectionFilter === 'materials' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSectionFilter('materials')}
+                      >
+                        <Image className="h-4 w-4 mr-2" />
+                        Materiais
+                      </Button>
+                      <Button
+                        variant={sectionFilter === 'briefings' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setSectionFilter('briefings')}
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Briefings
+                      </Button>
                     </div>
 
                     {/* Stats Cards - Materiais */}
