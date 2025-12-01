@@ -73,7 +73,7 @@ const ProjectView = () => {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runningFilter, setRunningFilter] = useState<RunningFilter>('all');
-  const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all'); // Added for materials vs briefings
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>('materials'); // Default to materials only
   const [showParticipants, setShowParticipants] = useState(true);
   const [activeSection, setActiveSection] = useState<'briefing' | 'briefing-approved' | 'materials'>('materials');
   const [briefingsApprovedCount, setBriefingsApprovedCount] = useState(0);
