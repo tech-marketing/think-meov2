@@ -13,14 +13,17 @@ interface BriefingCanvasEditorProps {
     slideCount?: number;
     slides?: Array<{ imageUrl: string; index: number }>;
   };
+  fileUrl?: string | null;
 }
 export const BriefingCanvasEditor: React.FC<BriefingCanvasEditorProps> = ({
   content,
   onChange,
-  wireframeData
+  wireframeData,
+  fileUrl
 }) => {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [autoImageInserted, setAutoImageInserted] = useState(false);
   
   const canvas = useBriefingCanvas({
     width: 700,
@@ -113,6 +116,20 @@ export const BriefingCanvasEditor: React.FC<BriefingCanvasEditorProps> = ({
     };
     reader.readAsDataURL(file);
   };
+
+  // Auto-inserir imagem única gerada pela IA no canvas (usa mesma lógica do botão "Adicionar Imagem")
+  useEffect(() => {
+    if (!canvas.fabricCanvas || autoImageInserted) return;
+
+    const hasObjects = canvas.fabricCanvas.getObjects().length > 0;
+    const singleSlide = wireframeData?.slides?.length === 1 && !wireframeData?.isCarousel;
+    const imageUrl = wireframeData?.slides?.[0]?.imageUrl || fileUrl;
+
+    if (singleSlide && imageUrl && !hasObjects) {
+      canvas.addImage(imageUrl);
+      setAutoImageInserted(true);
+    }
+  }, [canvas.fabricCanvas, wireframeData, fileUrl, autoImageInserted, canvas]);
 
   // Render carousel viewer if carousel data exists
   if (wireframeData?.isCarousel && wireframeData.slides && wireframeData.slides.length > 0) {

@@ -110,38 +110,10 @@ export const BriefingEditorLayout = ({
     );
   }
 
-  // Se tem file_url e é uma imagem (ou tipo wireframe/static/image), renderizar a imagem
-  // Isso cobre materiais gerados por workflow que podem ter type='wireframe' mas file_url com imagem
-  // Fallback: se tem URL e não caiu nos casos anteriores (video/carousel), tenta renderizar como imagem
-  if (urlToUse && (materialType === 'image' || materialType === 'wireframe' || materialType === 'static' || true)) {
-    return (
-      <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
-        <div className="max-w-4xl w-full flex flex-col gap-4">
-          <img
-            src={urlToUse}
-            alt="Briefing gerado"
-            className="w-full h-auto rounded-lg shadow-lg object-contain max-h-[calc(100vh-300px)]"
-            onError={(e) => {
-              console.error('Error loading image:', urlToUse);
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-          {(caption || wireframeData?.legenda_section?.legenda_principal || wireframeData?.caption) && (
-            <div className="p-6 bg-card rounded-lg border shadow-sm">
-              <h4 className="text-sm font-semibold text-muted-foreground mb-2">
-                Legenda
-              </h4>
-              <p className="text-sm whitespace-pre-wrap">
-                {caption || wireframeData?.legenda_section?.legenda_principal || wireframeData?.caption}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const singleSlide = wireframeData?.slides?.length === 1 && !wireframeData?.isCarousel;
+  const singleImageUrl = wireframeData?.slides?.[0]?.imageUrl || urlToUse;
 
-  // Fallback para canvas editor (materiais criados manualmente)
+  // Fallback para canvas editor (materiais criados manualmente ou imagens únicas)
   return (
     <div className="h-[calc(100vh-200px)] flex flex-col">
       {useCanvas ? (
@@ -149,6 +121,7 @@ export const BriefingEditorLayout = ({
           content={visualizationContent}
           onChange={onVisualizationChange}
           wireframeData={wireframeData}
+          fileUrl={singleSlide ? singleImageUrl : undefined}
         />
       ) : (
         <div

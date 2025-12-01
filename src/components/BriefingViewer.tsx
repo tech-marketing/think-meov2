@@ -582,8 +582,11 @@ export const BriefingViewer = ({
         {(() => {
           const slidesFromWireframe = briefing.wireframe_data?.slides;
 
-          // Permitir galeria também para wireframes com slides (estático ou carrossel)
-          if ((briefing.type === 'carousel' || briefing.type === 'wireframe') && slidesFromWireframe) {
+          // Galeria para carrossel ou quando há mais de um slide
+          if (briefing.type === 'carousel' && slidesFromWireframe) {
+            return <CarouselGallery slides={slidesFromWireframe} />;
+          }
+          if (slidesFromWireframe && slidesFromWireframe.length > 1) {
             return <CarouselGallery slides={slidesFromWireframe} />;
           }
 
