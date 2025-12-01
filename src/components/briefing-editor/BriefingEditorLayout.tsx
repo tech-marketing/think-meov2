@@ -135,7 +135,7 @@ export const BriefingEditorLayout = ({
 
   // Fallback para canvas editor (materiais criados manualmente)
   return (
-    <div className="h-[calc(100vh-200px)]">
+    <div className="h-[calc(100vh-200px)] flex flex-col">
       {useCanvas ? (
         <BriefingCanvasEditor
           content={visualizationContent}
@@ -148,6 +148,17 @@ export const BriefingEditorLayout = ({
           dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(visualizationContent) }}
         />
       )}
+
+      {/* Debug Info - Temporary */}
+      <div className="p-4 bg-gray-100 border-t text-xs font-mono overflow-auto max-h-40">
+        <p className="font-bold">Debug Info:</p>
+        <p>Material Type: {materialType}</p>
+        <p>File URL: {fileUrl || 'None'}</p>
+        <p>Resolved URL: {resolvedFileUrl || 'None'}</p>
+        <p>Has Wireframe Data: {wireframeData ? 'Yes' : 'No'}</p>
+        <p>Carousel Slides: {carouselSlides.length}</p>
+        <p>Regex Match: {urlToUse?.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i) ? 'Yes' : 'No'}</p>
+      </div>
     </div>
   );
 };

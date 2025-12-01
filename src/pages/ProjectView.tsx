@@ -183,18 +183,7 @@ const ProjectView = () => {
         if (materialType === 'image') {
           const fileName = material.name?.toLowerCase() || '';
           const fileUrl = material.file_url?.toLowerCase() || '';
-
-          // Verificar extensões de vídeo
-          if (fileName.includes('video') ||
-            fileUrl.includes('.mp4') || fileUrl.includes('.mov') ||
-            fileUrl.includes('.avi') || fileUrl.includes('.webm') ||
-            fileName.includes('.mp4') || fileName.includes('.mov') ||
-            fileName.includes('.avi') || fileName.includes('.webm')) {
-            materialType = 'video';
-          }
-          // Verificar extensões de PDF
-          else if (fileName.includes('pdf') || fileUrl.includes('.pdf') ||
-            fileName.includes('.pdf')) {
+          import { BriefingApprovedSection } => {
             materialType = 'pdf';
           }
         }
