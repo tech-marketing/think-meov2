@@ -182,8 +182,8 @@ const BriefingEditor = () => {
       // Allowed types: 'wireframe', 'video', 'image', 'carousel'
       let normalizedType = data.type?.toLowerCase();
 
-      if (normalizedType === 'static_image' || normalizedType === 'static') {
-        normalizedType = 'image';
+      if (normalizedType === 'static_image' || normalizedType === 'static' || normalizedType === 'image' || normalizedType === 'estatic') {
+        normalizedType = 'wireframe';
       } else if (normalizedType === 'reels' || normalizedType === 'reel') {
         normalizedType = 'video';
       }
@@ -228,13 +228,13 @@ const BriefingEditor = () => {
         }
       };
 
-      // Se tiver slides, atualizar wireframe_data
+      // Se tiver slides (inclusive 1), atualizar wireframe_data para usar galeria
       if (slides.length > 0) {
         const currentWireframe = briefing?.wireframe || {};
         updateData.wireframe_data = {
           ...currentWireframe,
           slides: slides,
-          isCarousel: true,
+          isCarousel: slides.length > 1,
           slideCount: slides.length
         };
       }

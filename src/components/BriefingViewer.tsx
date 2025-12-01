@@ -580,8 +580,11 @@ export const BriefingViewer = ({
 
         {/* ========== VISUALIZAÇÃO DO BRIEFING ========== */}
         {(() => {
-          if (briefing.type === 'carousel' && briefing.wireframe_data?.slides) {
-            return <CarouselGallery slides={briefing.wireframe_data.slides} />;
+          const slidesFromWireframe = briefing.wireframe_data?.slides;
+
+          // Permitir galeria também para wireframes com slides (estático ou carrossel)
+          if ((briefing.type === 'carousel' || briefing.type === 'wireframe') && slidesFromWireframe) {
+            return <CarouselGallery slides={slidesFromWireframe} />;
           }
 
           if (briefing.type === 'video' && briefing.status === 'processing') {
@@ -599,6 +602,7 @@ export const BriefingViewer = ({
           }
 
           if (briefing.type === 'wireframe') {
+            // Se não houver slides, voltar para o editor (canvas)
             return (
               <BriefingEditorLayout
                 briefingId={briefingId}

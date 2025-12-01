@@ -25,7 +25,7 @@ interface WebhookPayload {
 
 const mapType = (incomingType?: string) => {
   const normalized = (incomingType || "").toLowerCase();
-  if (normalized === "static" || normalized === "estatic") return "wireframe";
+  if (normalized === "static" || normalized === "estatic" || normalized === "image") return "wireframe";
   if (normalized === "carousel") return "carousel";
   if (normalized === "video") return "video";
   return "wireframe";
@@ -93,12 +93,13 @@ serve(async (req) => {
     let wireframeData: Record<string, unknown> | null = null;
     let fileUrl: string | null = null;
 
-    if (materialType === "carousel" && mediaUrls.length > 0) {
+    if ((materialType === "carousel" || materialType === "wireframe") && mediaUrls.length > 0) {
+      const slides = mediaUrls.map((url, index) => ({ imageUrl: url, index }));
       wireframeData = {
-        isCarousel: true,
-        slides: mediaUrls.map((url, index) => ({ imageUrl: url, index })),
+        isCarousel: slides.length > 1,
+        slides,
       };
-      fileUrl = JSON.stringify(mediaUrls);
+      fileUrl = slides.length > 1 ? JSON.stringify(mediaUrls) : mediaUrls[0];
     } else if (materialType === "video") {
       fileUrl = mediaUrls[0] || null;
       if (payload.storyboard) {
