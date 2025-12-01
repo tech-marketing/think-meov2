@@ -836,8 +836,8 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
 
       if (!profile?.company_id) throw new Error('Empresa não encontrada');
 
-      // Map format to type
-      let type = 'image';
+      // Map format to material type (static -> wireframe so it shows in Briefings)
+      let type: 'wireframe' | 'video' | 'carousel' = 'wireframe';
       if (format === 'reels' || format === 'video') type = 'video';
       if (format === 'carousel') type = 'carousel';
 
