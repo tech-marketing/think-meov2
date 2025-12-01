@@ -910,6 +910,9 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
           thumbnail_url: ad.image_url,
           caption: payload.legenda,
           created_by: profile.id,
+          // Marcar como briefing para aparecer na seção de Briefings e não em Materiais
+          is_briefing: true,
+          briefing_approved_by_client: false,
           metadata: {
             source_ad_id: ad.id,
             source_ad_name: ad.ad_name,
