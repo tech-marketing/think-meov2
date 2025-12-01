@@ -47,9 +47,9 @@ const MaterialView = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', { 
-      day: '2-digit', 
-      month: 'short', 
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
@@ -61,7 +61,7 @@ const MaterialView = () => {
 
     try {
       setLoading(true);
-      
+
       // Buscar material com suas relações
       const { data, error } = await supabase
         .from('materials')
@@ -107,7 +107,7 @@ const MaterialView = () => {
           .from('profiles')
           .select('id, full_name, role')
           .in('id', authorIds);
-        
+
         console.log('Profiles carregados:', profiles);
         console.log('Profiles erro:', profilesError);
         profilesData = profiles;
@@ -121,7 +121,7 @@ const MaterialView = () => {
         // Organizar comentários de forma hierárquica
         const allComments = (commentsData || []).map(comment => {
           const profile = profilesData?.find(p => p.id === comment.author_id);
-          
+
           return {
             id: comment.id,
             author: profile?.full_name || 'Usuário desconhecido',
@@ -150,26 +150,32 @@ const MaterialView = () => {
 
         // Handle wireframe data fallback and backfill
         let wireframeData = data.wireframe_data;
-        
-        // If it's a wireframe and no wireframe_data, try to parse from copy field
-        if (data.type === 'wireframe' && !wireframeData && data.copy) {
+
+        // If no wireframe_data, try to parse from copy field (for ANY type)
+        // This is crucial for AI briefings that might be typed as 'video'/'carousel' but store data in 'copy'
+        if (!wireframeData && data.copy) {
           try {
-            wireframeData = JSON.parse(data.copy);
-            console.log('Wireframe data parsed from copy field:', wireframeData);
-            
-            // Optional backfill: update wireframe_data field in database
-            if (wireframeData) {
-              supabase
-                .from('materials')
-                .update({ wireframe_data: wireframeData })
-                .eq('id', data.id)
-                .then(({ error }) => {
-                  if (error) {
-                    console.error('Error backfilling wireframe_data:', error);
-                  } else {
-                    console.log('Successfully backfilled wireframe_data for material:', data.id);
-                  }
-                });
+            // Only try to parse if it looks like JSON
+            if (data.copy.trim().startsWith('{') || data.copy.trim().startsWith('[')) {
+              const parsed = JSON.parse(data.copy);
+              // Simple validation to see if it looks like wireframe data
+              if (parsed.title || parsed.cta || parsed.wireframe_data || parsed.logo) {
+                wireframeData = parsed;
+                console.log('Wireframe data parsed from copy field:', wireframeData);
+
+                // Optional backfill: update wireframe_data field in database
+                supabase
+                  .from('materials')
+                  .update({ wireframe_data: wireframeData })
+                  .eq('id', data.id)
+                  .then(({ error }) => {
+                    if (error) {
+                      console.error('Error backfilling wireframe_data:', error);
+                    } else {
+                      console.log('Successfully backfilled wireframe_data for material:', data.id);
+                    }
+                  });
+              }
             }
           } catch (e) {
             console.error('Error parsing wireframe data from copy field:', e);
@@ -196,10 +202,10 @@ const MaterialView = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar material:', error);
-      
+
       // Check if it's a 404 or material not found error
       const isNotFoundError = error?.code === 'PGRST116' || error?.message?.includes('not found') || error?.status === 404;
-      
+
       toast({
         title: "Erro",
         description: isNotFoundError ? "Material deletado ou removido" : "Erro ao carregar material",
@@ -229,7 +235,7 @@ const MaterialView = () => {
       if (materialError || !currentMaterial) return;
 
       const statusFilter = searchParams.get('status');
-      
+
       // Buscar todos os materiais do projeto com o mesmo status
       let query = supabase
         .from('materials')
@@ -279,8 +285,8 @@ const MaterialView = () => {
   if (!material) {
     return (
       <div className="space-y-6">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           onClick={() => navigate(-1)}
           className="mb-4"
         >
@@ -297,8 +303,8 @@ const MaterialView = () => {
   return (
     <div className="space-y-6">
       {/* Back Navigation */}
-      <Button 
-        variant="ghost" 
+      <Button
+        variant="ghost"
         onClick={() => navigate(-1)}
         className="mb-4"
       >
