@@ -633,79 +633,79 @@ export const MaterialViewer = ({
     const showingAll = showAllReplies[comment.id] || false;
     const repliesToShow = shouldShowViewAll && !showingAll ? comment.replies?.slice(0, 3) : comment.replies;
     return <div key={comment.id} id={`comment-${comment.id}`} className={cn("space-y-2 transition-all duration-500", isReply && "ml-8 border-l-2 border-muted pl-4", highlightedCommentId === comment.id && ["bg-primary/10", "p-3", "rounded-lg", "border-2", "border-primary/50", "shadow-lg", "scale-[1.02]"].join(' '))}>
-        <div className="flex items-start space-x-3">
-          <Avatar className="h-8 w-8">
-            {comment.author_avatar ? <AvatarImage src={comment.author_avatar} alt={comment.author} /> : <AvatarFallback className="text-xs">
-                {comment.author.substring(0, 2).toUpperCase()}
-              </AvatarFallback>}
-          </Avatar>
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium">
-                {comment.author}
-              </span>
-              {comment.isClient && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                  Cliente
-                </span>}
-              <span className="text-xs text-muted-foreground">
-                {comment.timestamp}
-              </span>
-            </div>
-            <CommentWithMentions content={comment.content} className="text-sm text-muted-foreground" />
-            
-            {/* Reply button */}
-            {!isReply && <Button variant="ghost" size="sm" onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)} className="h-6 px-2 text-xs text-muted-foreground hover:text-primary">
-                <Reply className="h-3 w-3 mr-1" />
-                Responder
-              </Button>}
+      <div className="flex items-start space-x-3">
+        <Avatar className="h-8 w-8">
+          {comment.author_avatar ? <AvatarImage src={comment.author_avatar} alt={comment.author} /> : <AvatarFallback className="text-xs">
+            {comment.author.substring(0, 2).toUpperCase()}
+          </AvatarFallback>}
+        </Avatar>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium">
+              {comment.author}
+            </span>
+            {comment.isClient && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+              Cliente
+            </span>}
+            <span className="text-xs text-muted-foreground">
+              {comment.timestamp}
+            </span>
           </div>
-        </div>
+          <CommentWithMentions content={comment.content} className="text-sm text-muted-foreground" />
 
-        {/* Reply form */}
-        {replyingTo === comment.id && <div className="ml-11 space-y-2">
-            <MentionInput value={replyContent} onChange={setReplyContent} onMentionUsers={users => {
+          {/* Reply button */}
+          {!isReply && <Button variant="ghost" size="sm" onClick={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)} className="h-6 px-2 text-xs text-muted-foreground hover:text-primary">
+            <Reply className="h-3 w-3 mr-1" />
+            Responder
+          </Button>}
+        </div>
+      </div>
+
+      {/* Reply form */}
+      {replyingTo === comment.id && <div className="ml-11 space-y-2">
+        <MentionInput value={replyContent} onChange={setReplyContent} onMentionUsers={users => {
           setMentionedUsers(users);
         }} placeholder="Escreva sua resposta... Use @ para mencionar alguém" className="min-h-[80px] text-sm" projectId={projectId || undefined} />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => handleAddReply(comment.id)} disabled={!replyContent.trim() || loading}>
-                <Send className="h-3 w-3 mr-1" />
-                Responder
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => {
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => handleAddReply(comment.id)} disabled={!replyContent.trim() || loading}>
+            <Send className="h-3 w-3 mr-1" />
+            Responder
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => {
             setReplyingTo(null);
             setReplyContent("");
           }}>
-                Cancelar
-              </Button>
-            </div>
-          </div>}
+            Cancelar
+          </Button>
+        </div>
+      </div>}
 
-        {/* Render replies with limit */}
-        {repliesToShow && repliesToShow.length > 0 && <div className="space-y-2">
-            {repliesToShow.map(reply => renderComment(reply, true))}
-            
-            {/* Show "Ver tudo" button if there are more than 3 replies */}
-            {shouldShowViewAll && !showingAll && <div className="ml-11">
-                <Button variant="ghost" size="sm" onClick={() => setShowAllReplies(prev => ({
+      {/* Render replies with limit */}
+      {repliesToShow && repliesToShow.length > 0 && <div className="space-y-2">
+        {repliesToShow.map(reply => renderComment(reply, true))}
+
+        {/* Show "Ver tudo" button if there are more than 3 replies */}
+        {shouldShowViewAll && !showingAll && <div className="ml-11">
+          <Button variant="ghost" size="sm" onClick={() => setShowAllReplies(prev => ({
             ...prev,
             [comment.id]: true
           }))} className="text-xs text-primary hover:text-primary/80">
-                  <ChevronRight className="h-3 w-3 mr-1" />
-                  Ver tudo ({totalReplies - 3} mais respostas)
-                </Button>
-              </div>}
-            
-            {/* Show "Ver menos" button if showing all */}
-            {shouldShowViewAll && showingAll && <div className="ml-11">
-                <Button variant="ghost" size="sm" onClick={() => setShowAllReplies(prev => ({
+            <ChevronRight className="h-3 w-3 mr-1" />
+            Ver tudo ({totalReplies - 3} mais respostas)
+          </Button>
+        </div>}
+
+        {/* Show "Ver menos" button if showing all */}
+        {shouldShowViewAll && showingAll && <div className="ml-11">
+          <Button variant="ghost" size="sm" onClick={() => setShowAllReplies(prev => ({
             ...prev,
             [comment.id]: false
           }))} className="text-xs text-muted-foreground hover:text-foreground">
-                  Ver menos
-                </Button>
-              </div>}
-          </div>}
-      </div>;
+            Ver menos
+          </Button>
+        </div>}
+      </div>}
+    </div>;
   };
   const renderMediaPreview = () => {
     // Log para debug da URL do arquivo
@@ -723,45 +723,46 @@ export const MaterialViewer = ({
       return <VideoGenerationProgress materialId={id} projectId={projectId} />;
     }
 
-    // Special handling for wireframes - show WireframePreview if no file but has wireframe data
-    if (type === 'wireframe' && !urlToUse) {
+    // Special handling for wireframes OR materials with wireframe data but no file
+    // This supports AI-generated briefings which might be type 'video'/'carousel' but only have wireframe data initially
+    if (!urlToUse && (type === 'wireframe' || wireframeData)) {
       // For backward compatibility, only check wireframeData field
       let wireframeToRender = wireframeData;
       if (wireframeToRender) {
         // Se o wireframe está aprovado, mostrar a versão HTML estilizada
         if (currentStatus === 'approved') {
           return <div className="w-full">
-              <WireframeHTMLPreview wireframe_data={wireframeToRender} className="min-h-[500px]" />
-            </div>;
+            <WireframeHTMLPreview wireframe_data={wireframeToRender} className="min-h-[500px]" />
+          </div>;
         }
 
         // Caso contrário, mostrar a pré-visualização simples
         return <div className="w-full">
-            <WireframePreview wireframe_data={wireframeToRender} className="min-h-[384px]" />
-          </div>;
-      } else {
-        // Se não há dados de wireframe, mostrar mensagem amigável
+          <WireframePreview wireframe_data={wireframeToRender} className="min-h-[384px]" />
+        </div>;
+      } else if (type === 'wireframe') {
+        // Se não há dados de wireframe E é do tipo wireframe, mostrar mensagem amigável
         return <div className="w-full h-96 bg-muted/30 rounded-lg flex items-center justify-center border-2 border-dashed border-muted">
-            <div className="text-center space-y-4">
-              <div className="text-4xl">📐</div>
-              <div>
-                <p className="font-medium text-muted-foreground">Wireframe não disponível</p>
-                <p className="text-sm text-muted-foreground/70">Este material ainda não possui dados de wireframe</p>
-              </div>
+          <div className="text-center space-y-4">
+            <div className="text-4xl">📐</div>
+            <div>
+              <p className="font-medium text-muted-foreground">Wireframe não disponível</p>
+              <p className="text-sm text-muted-foreground/70">Este material ainda não possui dados de wireframe</p>
             </div>
-          </div>;
+          </div>
+        </div>;
       }
     }
     if (!urlToUse) {
       return <div className="w-full h-96 bg-muted/50 rounded-lg flex items-center justify-center border-2 border-dashed border-muted">
-          <div className="text-center space-y-4">
-            <div className="text-5xl opacity-50">📁</div>
-            <div>
-              <p className="font-medium text-muted-foreground">Arquivo não disponível</p>
-              <p className="text-sm text-muted-foreground/70">URL do arquivo não encontrada</p>
-            </div>
+        <div className="text-center space-y-4">
+          <div className="text-5xl opacity-50">📁</div>
+          <div>
+            <p className="font-medium text-muted-foreground">Arquivo não disponível</p>
+            <p className="text-sm text-muted-foreground/70">URL do arquivo não encontrada</p>
           </div>
-        </div>;
+        </div>
+      </div>;
     }
 
     // Verificar se há múltiplos arquivos (JSON array)
@@ -787,7 +788,7 @@ export const MaterialViewer = ({
     switch (type) {
       case 'image':
         return <div className="w-full h-96 bg-muted/30 rounded-lg flex items-center justify-center overflow-hidden border">
-            <img src={urlToUse} alt={name} className="max-w-full max-h-full object-contain rounded transition-opacity duration-200" onLoad={e => {
+          <img src={urlToUse} alt={name} className="max-w-full max-h-full object-contain rounded transition-opacity duration-200" onLoad={e => {
             e.currentTarget.style.opacity = '1';
             console.log('Imagem carregada com sucesso:', urlToUse);
           }} onError={async e => {
@@ -847,7 +848,7 @@ export const MaterialViewer = ({
           }} style={{
             opacity: 0
           }} />
-          </div>;
+        </div>;
       case 'video':
         // Verificar se o vídeo está sendo gerado
         if (currentStatus === 'processing') {
@@ -861,7 +862,7 @@ export const MaterialViewer = ({
 
         // Fallback: player padrão
         return <div className="w-full h-96 bg-muted/30 rounded-lg overflow-hidden border">
-            <video controls className="w-full h-full object-contain rounded" preload="metadata" onLoadStart={() => {
+          <video controls className="w-full h-full object-contain rounded" preload="metadata" onLoadStart={() => {
             console.log('Iniciando carregamento do vídeo:', urlToUse);
           }} onCanPlay={() => {
             console.log('Vídeo pronto para reprodução:', urlToUse);
@@ -898,140 +899,140 @@ export const MaterialViewer = ({
               parent.replaceChildren(errorDiv);
             }
           }}>
-              <source src={urlToUse} type="video/mp4" />
-              <source src={urlToUse} type="video/mov" />
-              <source src={urlToUse} type="video/avi" />
-              Seu navegador não suporta este formato de vídeo.
-            </video>
-          </div>;
+            <source src={urlToUse} type="video/mp4" />
+            <source src={urlToUse} type="video/mov" />
+            <source src={urlToUse} type="video/avi" />
+            Seu navegador não suporta este formato de vídeo.
+          </video>
+        </div>;
       case 'pdf':
         return <div className="w-full h-96 bg-muted/30 rounded-lg flex items-center justify-center border">
-            <div className="text-center space-y-4">
-              <div className="text-5xl">📄</div>
-              <div>
-                <p className="font-medium">Documento PDF</p>
-                <p className="text-sm text-muted-foreground">Visualize o documento completo</p>
-              </div>
-              <div className="flex gap-2 justify-center">
-                <Button variant="outline" onClick={downloadFile}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button onClick={() => window.open(urlToUse, '_blank')}>
-                  Visualizar
-                </Button>
-              </div>
+          <div className="text-center space-y-4">
+            <div className="text-5xl">📄</div>
+            <div>
+              <p className="font-medium">Documento PDF</p>
+              <p className="text-sm text-muted-foreground">Visualize o documento completo</p>
             </div>
-          </div>;
+            <div className="flex gap-2 justify-center">
+              <Button variant="outline" onClick={downloadFile}>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </Button>
+              <Button onClick={() => window.open(urlToUse, '_blank')}>
+                Visualizar
+              </Button>
+            </div>
+          </div>
+        </div>;
       default:
         return <div className="w-full h-96 bg-muted/30 rounded-lg flex items-center justify-center border-2 border-dashed border-muted">
-            <div className="text-center space-y-4">
-              <div className="text-4xl">❓</div>
-              <div>
-                <p className="font-medium text-muted-foreground">Formato não suportado</p>
-                <p className="text-sm text-muted-foreground/70">Tipo: {type}</p>
-                <Button variant="outline" onClick={downloadFile} className="mt-2">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Arquivo
-                </Button>
-              </div>
+          <div className="text-center space-y-4">
+            <div className="text-4xl">❓</div>
+            <div>
+              <p className="font-medium text-muted-foreground">Formato não suportado</p>
+              <p className="text-sm text-muted-foreground/70">Tipo: {type}</p>
+              <Button variant="outline" onClick={downloadFile} className="mt-2">
+                <Download className="h-4 w-4 mr-2" />
+                Download Arquivo
+              </Button>
             </div>
-          </div>;
+          </div>
+        </div>;
     }
   };
   return <div className={cn("container mx-auto px-4 lg:px-8 py-8", className)}>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              {isEditingName ? <>
-                  <Input value={editedName} onChange={e => setEditedName(e.target.value)} className="h-9 text-2xl font-bold" />
-                  <Button size="sm" onClick={handleRenameMaterial} disabled={!editedName.trim()}>
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => {
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            {isEditingName ? <>
+              <Input value={editedName} onChange={e => setEditedName(e.target.value)} className="h-9 text-2xl font-bold" />
+              <Button size="sm" onClick={handleRenameMaterial} disabled={!editedName.trim()}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => {
                 setIsEditingName(false);
                 setEditedName(name);
               }}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </> : <>
-                  <h1 className="text-2xl font-bold">{name}</h1>
-                  {(!projectId || isProjectParticipant || profile?.role === 'admin') && <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)} aria-label="Renomear material">
-                      <Pencil className="h-4 w-4" />
-                    </Button>}
-                </>}
-            </div>
-            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-              <div className="flex items-center space-x-2">
-                <User className="h-4 w-4" />
-                <span>{client}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Clock className="h-4 w-4" />
-                <span>Enviado em {uploadDate}</span>
-              </div>
-            </div>
+                <X className="h-4 w-4" />
+              </Button>
+            </> : <>
+              <h1 className="text-2xl font-bold">{name}</h1>
+              {(!projectId || isProjectParticipant || profile?.role === 'admin') && <Button variant="ghost" size="icon" onClick={() => setIsEditingName(true)} aria-label="Renomear material">
+                <Pencil className="h-4 w-4" />
+              </Button>}
+            </>}
           </div>
-          <div className="flex items-center space-x-3">
-            <StatusBadge status={currentStatus} isRunning={currentIsRunning} />
-            {/* Botão de exclusão para criadores, admins e colaboradores */}
-            {profile && (profile.role === 'admin' || profile.role === 'collaborator' || profile.id === profile?.id // Criador (usar created_by quando disponível)
-          ) && <DeleteMaterialModal materialId={id} materialName={name} onDeleted={onStatusUpdate} redirectAfterDelete={true} projectId={projectId} />}
-            <Button variant="outline" size="sm" onClick={downloadFile} disabled={!fileUrl}>
-              <Download className="h-4 w-4" />
-            </Button>
+          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+            <div className="flex items-center space-x-2">
+              <User className="h-4 w-4" />
+              <span>{client}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Clock className="h-4 w-4" />
+              <span>Enviado em {uploadDate}</span>
+            </div>
           </div>
         </div>
+        <div className="flex items-center space-x-3">
+          <StatusBadge status={currentStatus} isRunning={currentIsRunning} />
+          {/* Botão de exclusão para criadores, admins e colaboradores */}
+          {profile && (profile.role === 'admin' || profile.role === 'collaborator' || profile.id === profile?.id // Criador (usar created_by quando disponível)
+          ) && <DeleteMaterialModal materialId={id} materialName={name} onDeleted={onStatusUpdate} redirectAfterDelete={true} projectId={projectId} />}
+          <Button variant="outline" size="sm" onClick={downloadFile} disabled={!fileUrl}>
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-        {/* Project Info */}
-        {project && <Card className="border-info/20 bg-info-light/30">
-            <CardContent className="pt-4">
-              <div className="flex items-center space-x-2 text-info">
-                <Clock className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  Projeto: {project}
-                </span>
+      {/* Project Info */}
+      {project && <Card className="border-info/20 bg-info-light/30">
+        <CardContent className="pt-4">
+          <div className="flex items-center space-x-2 text-info">
+            <Clock className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              Projeto: {project}
+            </span>
+          </div>
+        </CardContent>
+      </Card>}
+
+
+      {/* Reference - Hidden as per user request */}
+
+      {/* Caption/Legend */}
+      {caption && <Card className="border-primary/20 bg-primary-light/30">
+        <CardHeader className="pb-3">
+          <h3 className="font-semibold text-primary">Legenda/Descrição</h3>
+        </CardHeader>
+        <CardContent>
+          <p className="text-foreground leading-relaxed">{caption}</p>
+        </CardContent>
+      </Card>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Media Preview */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Media Preview */}
+          {<Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <h3 className="font-semibold">Pré-visualização</h3>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowVersionsModal(true)} disabled={versionCount === 0}>
+                  <History className="h-4 w-4 mr-2" />
+                  Ver outras versões
+                </Button>
+                <Button variant="default" size="sm" onClick={() => setShowChangeModal(true)} disabled={versionCount >= 3}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Alterar Material
+                </Button>
               </div>
-            </CardContent>
-          </Card>}
-
-
-        {/* Reference - Hidden as per user request */}
-
-        {/* Caption/Legend */}
-        {caption && <Card className="border-primary/20 bg-primary-light/30">
-            <CardHeader className="pb-3">
-              <h3 className="font-semibold text-primary">Legenda/Descrição</h3>
             </CardHeader>
             <CardContent>
-              <p className="text-foreground leading-relaxed">{caption}</p>
-            </CardContent>
-          </Card>}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Media Preview */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Media Preview */}
-            {<Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <h3 className="font-semibold">Pré-visualização</h3>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setShowVersionsModal(true)} disabled={versionCount === 0}>
-                      <History className="h-4 w-4 mr-2" />
-                      Ver outras versões
-                    </Button>
-                    <Button variant="default" size="sm" onClick={() => setShowChangeModal(true)} disabled={versionCount >= 3}>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Alterar Material
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {/* Render wireframe if type is wireframe */}
-                  {type === 'wireframe' && wireframeData ? <div className="w-full">
-                      {currentStatus === 'approved' ? <WireframeHTMLPreview wireframe_data={wireframeData} className="min-h-[500px]" /> : <WireframeEditor wireframe={wireframeData} creativeId={id} aspectRatio="1:1" onSave={async layout => {
+              {/* Render wireframe if type is wireframe */}
+              {type === 'wireframe' && wireframeData ? <div className="w-full">
+                {currentStatus === 'approved' ? <WireframeHTMLPreview wireframe_data={wireframeData} className="min-h-[500px]" /> : <WireframeEditor wireframe={wireframeData} creativeId={id} aspectRatio="1:1" onSave={async layout => {
                   try {
                     const {
                       error
@@ -1061,47 +1062,47 @@ export const MaterialViewer = ({
                     });
                   }
                 }} />}
-                    </div> : (/* Media Preview for other types */
-              renderMediaPreview())}
-                </CardContent>
-              </Card>}
+              </div> : (/* Media Preview for other types */
+                renderMediaPreview())}
+            </CardContent>
+          </Card>}
 
-            {/* Approval Actions - Admins sempre têm acesso, participantes do projeto também */}
-            {participantCheckLoading ? <Card>
-                <CardHeader>
-                  <h3 className="font-semibold">Ações de Aprovação</h3>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-muted-foreground">Verificando permissões...</div>
-                  </div>
-                </CardContent>
-              </Card> : !projectId || isProjectParticipant || profile?.role === 'admin' ? <Card>
-                <CardHeader>
-                  <h3 className="font-semibold">Ações de Aprovação</h3>
-                </CardHeader>
-                 <CardContent className="space-y-4">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex gap-3">
-                      {/* Aprovação Interna */}
-                      <Button onClick={handleInternalApproval} variant={currentStatus === 'internal_approval' ? 'success' : 'default'} className="flex-1" disabled={loading}>
-                        <ThumbsUp className="h-4 w-4 mr-2" />
-                        {currentStatus === 'internal_approval' ? 'Aprovado - Interno' : 'Aprovar - Interno'}
-                      </Button>
-                      
-                      {/* Aprovação Cliente */}
-                      <Button onClick={handleClientApproval} variant={currentStatus === 'client_approval' ? 'success' : 'default'} className="flex-1" disabled={loading}>
-                        <ThumbsUp className="h-4 w-4 mr-2" />
-                        {currentStatus === 'client_approval' ? 'Aprovado - Cliente' : 'Aprovar - Cliente'}
-                      </Button>
-                    </div>
-                    
-                    {/* Toggle de Em Veiculação quando status for client_approval */}
-                    {currentStatus === 'client_approval' && <div className="flex items-center justify-center gap-2 p-3 bg-muted/30 rounded-md border">
-                        <span className="text-sm font-medium">
-                          {currentIsRunning ? 'Em Veiculação' : 'Disponível'}
-                        </span>
-                        <Button variant="outline" size="sm" onClick={async () => {
+          {/* Approval Actions - Admins sempre têm acesso, participantes do projeto também */}
+          {participantCheckLoading ? <Card>
+            <CardHeader>
+              <h3 className="font-semibold">Ações de Aprovação</h3>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-muted-foreground">Verificando permissões...</div>
+              </div>
+            </CardContent>
+          </Card> : !projectId || isProjectParticipant || profile?.role === 'admin' ? <Card>
+            <CardHeader>
+              <h3 className="font-semibold">Ações de Aprovação</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  {/* Aprovação Interna */}
+                  <Button onClick={handleInternalApproval} variant={currentStatus === 'internal_approval' ? 'success' : 'default'} className="flex-1" disabled={loading}>
+                    <ThumbsUp className="h-4 w-4 mr-2" />
+                    {currentStatus === 'internal_approval' ? 'Aprovado - Interno' : 'Aprovar - Interno'}
+                  </Button>
+
+                  {/* Aprovação Cliente */}
+                  <Button onClick={handleClientApproval} variant={currentStatus === 'client_approval' ? 'success' : 'default'} className="flex-1" disabled={loading}>
+                    <ThumbsUp className="h-4 w-4 mr-2" />
+                    {currentStatus === 'client_approval' ? 'Aprovado - Cliente' : 'Aprovar - Cliente'}
+                  </Button>
+                </div>
+
+                {/* Toggle de Em Veiculação quando status for client_approval */}
+                {currentStatus === 'client_approval' && <div className="flex items-center justify-center gap-2 p-3 bg-muted/30 rounded-md border">
+                  <span className="text-sm font-medium">
+                    {currentIsRunning ? 'Em Veiculação' : 'Disponível'}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={async () => {
                     try {
                       const newIsRunning = !currentIsRunning;
                       const {
@@ -1124,66 +1125,66 @@ export const MaterialViewer = ({
                       });
                     }
                   }}>
-                          {currentIsRunning ? 'Marcar como Disponível' : 'Marcar como Em Veiculação'}
-                        </Button>
-                      </div>}
-              <Button variant={currentStatus === 'rejected' ? 'outline' : 'destructive'} onClick={handleReject} className={`w-full ${currentStatus === 'rejected' ? 'border-destructive text-destructive bg-destructive/10' : ''}`} disabled={loading}>
-                <X className="h-4 w-4 mr-2" />
-                {currentStatus === 'rejected' ? 'Material Reprovado' : 'Reprovar Material'}
-              </Button>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Comentários com Menções (opcional)
-                    </label>
-                    <MentionInput value={newComment} onChange={setNewComment} onMentionUsers={setMentionedUsers} placeholder="Adicione seus comentários... Use @ para mencionar alguém" className="min-h-[100px]" projectId={projectId || undefined} />
-                    <Button onClick={handleAddComment} size="sm" variant="gradient" className="w-full">
-                      <Send className="h-4 w-4 mr-2" />
-                      Enviar Comentário
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card> : <Card>
-                <CardHeader>
-                  <h3 className="font-semibold">Ações de Aprovação</h3>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center space-y-2">
-                      <div className="text-muted-foreground">🔒</div>
-                      <p className="text-muted-foreground">
-                        Apenas participantes do projeto podem aprovar materiais e comentar
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>}
-          </div>
-
-          {/* Comments Section */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Comentários</h3>
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <MessageSquare className="h-4 w-4" />
-                    <span>{comments.length}</span>
-                  </div>
+                    {currentIsRunning ? 'Marcar como Disponível' : 'Marcar como Em Veiculação'}
+                  </Button>
+                </div>}
+                <Button variant={currentStatus === 'rejected' ? 'outline' : 'destructive'} onClick={handleReject} className={`w-full ${currentStatus === 'rejected' ? 'border-destructive text-destructive bg-destructive/10' : ''}`} disabled={loading}>
+                  <X className="h-4 w-4 mr-2" />
+                  {currentStatus === 'rejected' ? 'Material Reprovado' : 'Reprovar Material'}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Comentários com Menções (opcional)
+                </label>
+                <MentionInput value={newComment} onChange={setNewComment} onMentionUsers={setMentionedUsers} placeholder="Adicione seus comentários... Use @ para mencionar alguém" className="min-h-[100px]" projectId={projectId || undefined} />
+                <Button onClick={handleAddComment} size="sm" variant="gradient" className="w-full">
+                  <Send className="h-4 w-4 mr-2" />
+                  Enviar Comentário
+                </Button>
+              </div>
+            </CardContent>
+          </Card> : <Card>
+            <CardHeader>
+              <h3 className="font-semibold">Ações de Aprovação</h3>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center space-y-2">
+                  <div className="text-muted-foreground">🔒</div>
+                  <p className="text-muted-foreground">
+                    Apenas participantes do projeto podem aprovar materiais e comentar
+                  </p>
                 </div>
-              </CardHeader>
-               <CardContent className="space-y-4">
-                 {comments.length === 0 ? <p className="text-center text-muted-foreground py-8">
-                     Nenhum comentário ainda
-                   </p> : comments.map(comment => renderComment(comment))}
-                </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>}
+        </div>
+
+        {/* Comments Section */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Comentários</h3>
+                <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>{comments.length}</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {comments.length === 0 ? <p className="text-center text-muted-foreground py-8">
+                Nenhum comentário ainda
+              </p> : comments.map(comment => renderComment(comment))}
+            </CardContent>
+          </Card>
         </div>
       </div>
+    </div>
 
-      {/* Modais de versionamento */}
-      <ChangeMaterialModal open={showChangeModal} onOpenChange={setShowChangeModal} materialId={id} materialName={name} currentVersionCount={versionCount} onSuccess={() => {
+    {/* Modais de versionamento */}
+    <ChangeMaterialModal open={showChangeModal} onOpenChange={setShowChangeModal} materialId={id} materialName={name} currentVersionCount={versionCount} onSuccess={() => {
       onStatusUpdate?.();
       // Recarregar version_count
       supabase.from('materials').select('version_count').eq('id', id).single().then(({
@@ -1193,8 +1194,8 @@ export const MaterialViewer = ({
       });
     }} />
 
-      <MaterialVersionsModal open={showVersionsModal} onOpenChange={setShowVersionsModal} materialId={id} materialName={name} materialType={type} currentFileUrl={fileUrl || ''} onRestore={() => {
+    <MaterialVersionsModal open={showVersionsModal} onOpenChange={setShowVersionsModal} materialId={id} materialName={name} materialType={type} currentFileUrl={fileUrl || ''} onRestore={() => {
       onStatusUpdate?.();
     }} />
-    </div>;
+  </div>;
 };
