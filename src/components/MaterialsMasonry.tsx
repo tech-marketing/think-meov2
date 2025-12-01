@@ -237,50 +237,44 @@ const MaterialCard = ({ material, onClick }: { material: Material; onClick: () =
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Tilt
-        className="h-full"
-        rotationFactor={10}
-        springOptions={{ stiffness: 200, damping: 20 }}
+      <Card
+        className="cursor-pointer hover:shadow-xl transition-all duration-300 group overflow-hidden h-full border-transparent hover:border-primary/20"
+        onClick={onClick}
       >
-        <Card
-          className="cursor-pointer hover:shadow-xl transition-all duration-300 group overflow-hidden h-full border-transparent hover:border-primary/20"
-          onClick={onClick}
-        >
-          <CardContent className="p-0 flex flex-col h-full">
-            {/* Thumbnail / Preview Area */}
-            <div className="relative aspect-video overflow-hidden bg-muted">
-              {renderPreview()}
+        <CardContent className="p-0 flex flex-col h-full">
+          {/* Thumbnail / Preview Area */}
+          <div className="relative aspect-video overflow-hidden bg-muted">
+            {renderPreview()}
+          </div>
+
+          {/* Content */}
+          <div className="p-4 space-y-2 flex-1 flex flex-col">
+            <div className="flex justify-between items-start gap-2">
+              <h4 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                {material.name}
+              </h4>
             </div>
 
-            {/* Content */}
-            <div className="p-4 space-y-2 flex-1 flex flex-col">
-              <div className="flex justify-between items-start gap-2">
-                <h4 className="font-semibold text-base text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                  {material.name}
-                </h4>
-              </div>
+            <div className="mt-auto space-y-2">
+              {material.project && (
+                <p className="text-sm text-muted-foreground line-clamp-1">
+                  {material.project}
+                </p>
+              )}
 
-              <div className="mt-auto space-y-2">
-                {material.project && (
-                  <p className="text-sm text-muted-foreground line-clamp-1">
-                    {material.project}
-                  </p>
-                )}
+              {material.company && (
+                <p className="text-xs text-muted-foreground uppercase font-medium tracking-wider">
+                  {material.company} • {new Date().getFullYear()}
+                </p>
+              )}
 
-                {material.company && (
-                  <p className="text-xs text-muted-foreground uppercase font-medium tracking-wider">
-                    {material.company} • {new Date().getFullYear()}
-                  </p>
-                )}
-
-                <div className="pt-2 flex items-center justify-between">
-                  <StatusBadge status={material.status} isRunning={material.is_running} />
-                </div>
+              <div className="pt-2 flex items-center justify-between">
+                <StatusBadge status={material.status} isRunning={material.is_running} />
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </Tilt>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

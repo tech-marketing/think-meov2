@@ -444,6 +444,7 @@ const BriefingEditor = () => {
         materialType={materialType}
         wireframeData={briefing?.wireframe}
         fileUrl={(briefing as any)?.file_url}
+        thumbnailUrl={(briefing as any)?.thumbnail_url || (briefing as any)?.thumbnail}
         caption={(briefing as any)?.copy || (briefing as any)?.caption}
       />
     </div>

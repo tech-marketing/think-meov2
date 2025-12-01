@@ -19,6 +19,7 @@ interface BriefingEditorLayoutProps {
   wireframeData?: any;
   materialType?: string;
   fileUrl?: string;
+  thumbnailUrl?: string;
   caption?: string;
 }
 
@@ -37,24 +38,26 @@ export const BriefingEditorLayout = ({
   wireframeData,
   materialType,
   fileUrl,
+  thumbnailUrl,
   caption
 }: BriefingEditorLayoutProps) => {
   const [resolvedFileUrl, setResolvedFileUrl] = useState<string | null>(null);
 
   // URL resolution logic
   useEffect(() => {
-    if (fileUrl) {
+    const urlToResolve = fileUrl || thumbnailUrl;
+    if (urlToResolve) {
       // If it's Google Cloud Storage URL, use directly
-      if (fileUrl.includes('storage.googleapis.com')) {
-        setResolvedFileUrl(fileUrl);
-      } else if (fileUrl.includes('supabase.co/storage')) {
+      if (urlToResolve.includes('storage.googleapis.com')) {
+        setResolvedFileUrl(urlToResolve);
+      } else if (urlToResolve.includes('supabase.co/storage')) {
         // Generate signed URL for Supabase storage
         const generateSignedUrl = async () => {
           try {
-            const urlParts = fileUrl.split('/storage/v1/object/public/materials/');
+            const urlParts = urlToResolve.split('/storage/v1/object/public/materials/');
             if (urlParts.length < 2) {
               // Try another pattern or just use as is if it's already a public URL
-              setResolvedFileUrl(fileUrl);
+              setResolvedFileUrl(urlToResolve);
               return;
             }
             const filePath = urlParts[1];
@@ -64,29 +67,29 @@ export const BriefingEditorLayout = ({
 
             if (error) {
               console.error('Error generating signed URL:', error);
-              setResolvedFileUrl(fileUrl); // Fallback
+              setResolvedFileUrl(urlToResolve); // Fallback
               return;
             }
             setResolvedFileUrl(data.signedUrl);
           } catch (error) {
             console.error('Error processing file URL:', error);
-            setResolvedFileUrl(fileUrl);
+            setResolvedFileUrl(urlToResolve);
           }
         };
         generateSignedUrl();
       } else {
         // Use file_url directly if it doesn't match known patterns
-        setResolvedFileUrl(fileUrl);
+        setResolvedFileUrl(urlToResolve);
       }
     }
-  }, [fileUrl]);
+  }, [fileUrl, thumbnailUrl]);
 
   // Parse carousel images from file_url if it's a JSON array
   let carouselSlides = wireframeData?.slides || [];
   // ... (carousel parsing logic)
 
   // Use resolvedFileUrl for rendering
-  const urlToUse = resolvedFileUrl || fileUrl;
+  const urlToUse = resolvedFileUrl || fileUrl || thumbnailUrl;
 
   // Se é um carrossel com slides, renderizar a galeria de imagens
   if (materialType === 'carousel' && carouselSlides.length > 0) {
