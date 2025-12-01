@@ -740,9 +740,33 @@ export const MaterialViewer = ({
         const hasWireframeElements = wireframeToRender?.wireframe?.elements?.length > 0 || wireframeToRender?.elements?.length > 0;
 
         // Normalize wireframe data for Editor if needed
-        const editorWireframe = wireframeToRender?.wireframe || wireframeToRender;
+        let editorWireframe = wireframeToRender?.wireframe || wireframeToRender;
 
-        if (hasWireframeElements) {
+        // If we have an image URL but no image element in the wireframe, inject one
+        // This fixes the issue where AI generated images don't show up in the canvas
+        if (wireframeToRender?.image_url && editorWireframe?.elements) {
+          const hasImageElement = editorWireframe.elements.some((el: any) => el.role === 'image');
+
+          if (!hasImageElement) {
+            // Create a deep copy to avoid mutating original data
+            editorWireframe = JSON.parse(JSON.stringify(editorWireframe));
+
+            // Add image element as background/main visual
+            editorWireframe.elements.unshift({
+              id: 'generated-image',
+              role: 'image',
+              src: wireframeToRender.image_url,
+              left: 0,
+              top: 0,
+              width: 100,
+              height: 100,
+              zIndex: 0,
+              locked: true
+            });
+          }
+        }
+
+        if (hasWireframeElements || (wireframeToRender?.image_url && editorWireframe)) {
           return (
             <div className="w-full h-full bg-gray-100 flex items-center justify-center p-4 overflow-hidden min-h-[600px]">
               <div className="w-full h-full max-w-5xl max-h-[800px] bg-white shadow-lg rounded-lg overflow-hidden">

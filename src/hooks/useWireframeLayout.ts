@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface WireframeElement {
   id: string;
-  role: 'logo' | 'title' | 'subtitle' | 'persona' | 'separator' | 'cta' | 'text' | 'news-title' | 'source-label' | 'card-text';
+  role: 'logo' | 'title' | 'subtitle' | 'persona' | 'separator' | 'cta' | 'text' | 'news-title' | 'source-label' | 'card-text' | 'image';
   left: number;
   top: number;
   width: number;
@@ -14,6 +14,7 @@ export interface WireframeElement {
   personType?: 'human' | 'product' | 'label';
   personColor?: string;
   reasoning?: string;
+  src?: string;
 }
 
 export interface WireframeContent {
@@ -54,10 +55,10 @@ interface UseWireframeLayoutProps {
   initialWireframe?: any;
 }
 
-export const useWireframeLayout = ({ 
-  creativeId, 
-  aspectRatio, 
-  initialWireframe 
+export const useWireframeLayout = ({
+  creativeId,
+  aspectRatio,
+  initialWireframe
 }: UseWireframeLayoutProps) => {
   const { toast } = useToast();
   const [layout, setLayout] = useState<WireframeLayout | null>(null);
@@ -143,11 +144,11 @@ export const useWireframeLayout = ({
       {
         id: 'logo',
         role: 'logo',
-        left: initialWireframe.logo?.position === 'top-left' ? 5 : 
-              initialWireframe.logo?.position === 'top-right' ? 75 : 42.5,
+        left: initialWireframe.logo?.position === 'top-left' ? 5 :
+          initialWireframe.logo?.position === 'top-right' ? 75 : 42.5,
         top: 5,
-        width: initialWireframe.logo?.size === 'small' ? 15 : 
-               initialWireframe.logo?.size === 'large' ? 25 : 20,
+        width: initialWireframe.logo?.size === 'small' ? 15 :
+          initialWireframe.logo?.size === 'large' ? 25 : 20,
         height: 8,
         zIndex: 1
       },
@@ -260,7 +261,7 @@ export const useWireframeLayout = ({
 
       // Save to localStorage (until we create the database table)
       localStorage.setItem(`wireframe_layout_${layoutKey}`, JSON.stringify(updatedLayout));
-      
+
       // Also save versions history in localStorage
       const versionsKey = `wireframe_versions_${creativeId}_${aspectRatio}`;
       const existingVersions = JSON.parse(localStorage.getItem(versionsKey) || '[]');
@@ -274,7 +275,7 @@ export const useWireframeLayout = ({
           createdBy: 'Usuário Atual'
         }
       ].sort((a: any, b: any) => b.version - a.version);
-      
+
       localStorage.setItem(versionsKey, JSON.stringify(newVersions));
 
       toast({
@@ -302,7 +303,7 @@ export const useWireframeLayout = ({
     try {
       const versionsKey = `wireframe_versions_${creativeId}_${aspectRatio}`;
       const savedVersions = localStorage.getItem(versionsKey);
-      
+
       if (savedVersions) {
         const versionsList: LayoutVersion[] = JSON.parse(savedVersions);
         setVersions(versionsList);

@@ -12,14 +12,14 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { 
-  Edit3, 
-  Grid3X3, 
-  Save, 
-  Undo2, 
+import {
+  Edit3,
+  Grid3X3,
+  Save,
+  Undo2,
   Redo2,
   AlignLeft,
-  AlignCenter, 
+  AlignCenter,
   AlignRight,
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
@@ -40,7 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWireframeLayout, WireframeElement, WireframeLayout } from '@/hooks/useWireframeLayout';
 import { WireframeLayoutManager } from './WireframeLayoutManager';
 import { WireframeTemplateSelector } from './WireframeTemplateSelector';
-import { 
+import {
   ASPECT_RATIOS,
   applySmartSnapping,
   calculateSnapGuides,
@@ -83,9 +83,9 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const handleTemplateSelect = (type: 'default' | 'advertorial' | 'news' | 'card') => {
     saveToHistory();
-    
+
     let newLayout: WireframeLayout | null = null;
-    
+
     switch (type) {
       case 'advertorial':
         newLayout = createAdvertorialTemplate();
@@ -99,7 +99,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       default:
         return;
     }
-    
+
     if (newLayout) {
       setLayout(newLayout);
       setShowTemplateSelector(false);
@@ -161,10 +161,10 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent, elementId: string) => {
     if (!isEditMode) return;
-    
+
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!layout) return;
     const element = layout.elements.find(el => el.id === elementId);
     if (!element || element.locked) return;
@@ -189,7 +189,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const handleCanvasClick = (e: React.MouseEvent) => {
     if (!isEditMode) return;
-    
+
     // Se clicar diretamente no canvas (não em um elemento), desseleciona e sai do modo de edição
     if (e.target === e.currentTarget) {
       if (editingText) {
@@ -203,9 +203,9 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
   // Handle text click to enter edit mode (Canva style)
   const handleTextClick = (e: React.MouseEvent, elementId: string) => {
     if (!isEditMode) return;
-    
+
     e.stopPropagation();
-    
+
     if (!layout) return;
     const element = layout.elements.find(el => el.id === elementId);
     if (!element || element.locked) return;
@@ -213,7 +213,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
     // If element is already selected and we're not dragging, enter edit mode
     if (selectedElement === elementId && !isDragging) {
       setEditingText(elementId);
-      
+
       // Focus the element after a short delay to ensure render
       setTimeout(() => {
         const editableEl = editableRefs.current.get(elementId);
@@ -240,9 +240,9 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
     if (!editableEl) return;
 
     const newText = editableEl.innerText;
-    
+
     saveToHistory();
-    
+
     if (element.role === 'title') {
       setLayout(prev => prev ? ({
         ...prev,
@@ -264,7 +264,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
         content: { ...prev.content, sourceLabel: newText }
       }) : prev);
     }
-    
+
     setEditingText(null);
   };
 
@@ -286,7 +286,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
-    
+
     const deltaX = ((e.clientX - dragStart.x) / rect.width) * 100;
     const deltaY = ((e.clientY - dragStart.y) / rect.height) * 100;
 
@@ -294,13 +294,13 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       if (!prev) return prev;
       return ({
         ...prev,
-        elements: prev.elements.map(el => 
-          el.id === selectedElement 
-            ? { 
-                ...el, 
-                left: Math.max(0, Math.min(100 - el.width, el.left + deltaX)),
-                top: Math.max(0, Math.min(100 - el.height, el.top + deltaY))
-              }
+        elements: prev.elements.map(el =>
+          el.id === selectedElement
+            ? {
+              ...el,
+              left: Math.max(0, Math.min(100 - el.width, el.left + deltaX)),
+              top: Math.max(0, Math.min(100 - el.height, el.top + deltaY))
+            }
             : el
         )
       });
@@ -318,7 +318,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
-      
+
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
@@ -332,8 +332,8 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       if (!prev) return prev;
       return ({
         ...prev,
-        elements: prev.elements.map(el => 
-          el.id === elementId 
+        elements: prev.elements.map(el =>
+          el.id === elementId
             ? { ...el, [property]: !el[property] }
             : el
         )
@@ -343,7 +343,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const alignElements = (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
     if (!selectedElement) return;
-    
+
     saveToHistory();
     setLayout(prev => {
       if (!prev) return prev;
@@ -351,7 +351,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
         ...prev,
         elements: prev.elements.map(el => {
           if (el.id !== selectedElement) return el;
-          
+
           switch (alignment) {
             case 'left':
               return { ...el, left: 0 };
@@ -379,8 +379,8 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       if (!prev) return prev;
       return ({
         ...prev,
-        elements: prev.elements.map(el => 
-          el.id === elementId 
+        elements: prev.elements.map(el =>
+          el.id === elementId
             ? { ...el, zIndex: direction === 'up' ? el.zIndex + 1 : Math.max(1, el.zIndex - 1) }
             : el
         )
@@ -401,15 +401,15 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
           });
           return;
         }
-        
+
         try {
           await saveLayout(layout, true);
-          
+
           // Salvar também no material se onSave foi fornecido
           if (onSave) {
             onSave(layout);
           }
-          
+
           toast({
             title: "Layout salvo!",
             description: "As alterações foram salvas automaticamente."
@@ -429,7 +429,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const addTextElement = () => {
     if (!layout) return;
-    
+
     saveToHistory();
     const newElement: WireframeElement = {
       id: `text_${Date.now()}`,
@@ -441,7 +441,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       zIndex: 4,
       locked: false
     };
-    
+
     setLayout(prev => {
       if (!prev) return prev;
       return {
@@ -453,7 +453,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const deleteElement = (elementId: string) => {
     if (!layout) return;
-    
+
     // Verificar se é o último elemento
     if (layout.elements.length <= 1) {
       toast({
@@ -463,7 +463,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       });
       return;
     }
-    
+
     saveToHistory();
     setLayout(prev => {
       if (!prev) return prev;
@@ -472,7 +472,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
         elements: prev.elements.filter(el => el.id !== elementId)
       };
     });
-    
+
     // Clear selection if deleted element was selected
     if (selectedElement === elementId) {
       setSelectedElement(null);
@@ -483,10 +483,10 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
   // Copy element to clipboard
   const copyElement = () => {
     if (!selectedElement || !layout) return;
-    
+
     const element = layout.elements.find(el => el.id === selectedElement);
     if (!element) return;
-    
+
     setClipboard({ ...element });
     toast({
       title: "Elemento copiado",
@@ -497,9 +497,9 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
   // Paste element from clipboard
   const pasteElement = () => {
     if (!clipboard || !layout) return;
-    
+
     saveToHistory();
-    
+
     // Create new element with offset position and new ID
     const newElement: WireframeElement = {
       ...clipboard,
@@ -507,7 +507,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       left: Math.min(clipboard.left + 5, 95),
       top: Math.min(clipboard.top + 5, 95),
     };
-    
+
     setLayout(prev => {
       if (!prev) return prev;
       return {
@@ -515,7 +515,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
         elements: [...prev.elements, newElement]
       };
     });
-    
+
     setSelectedElement(newElement.id);
     toast({
       title: "Elemento colado",
@@ -526,12 +526,12 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
   // Duplicate selected element
   const duplicateElement = () => {
     if (!selectedElement || !layout) return;
-    
+
     const element = layout.elements.find(el => el.id === selectedElement);
     if (!element) return;
-    
+
     saveToHistory();
-    
+
     // Create duplicate with offset position
     const newElement: WireframeElement = {
       ...element,
@@ -539,7 +539,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       left: Math.min(element.left + 5, 95),
       top: Math.min(element.top + 5, 95),
     };
-    
+
     setLayout(prev => {
       if (!prev) return prev;
       return {
@@ -547,7 +547,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
         elements: [...prev.elements, newElement]
       };
     });
-    
+
     setSelectedElement(newElement.id);
     toast({
       title: "Elemento duplicado",
@@ -654,7 +654,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
   const updateElementProperties = (updates: Partial<WireframeElement>) => {
     if (!selectedElement) return;
-    
+
     saveToHistory();
     setLayout(prev => {
       if (!prev) return prev;
@@ -706,17 +706,17 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       if (selectedElement && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
-        
+
         setLayout(prev => {
           if (!prev) return prev;
           return {
             ...prev,
             elements: prev.elements.map(el => {
               if (el.id !== selectedElement) return el;
-              
+
               let newLeft = el.left;
               let newTop = el.top;
-              
+
               switch (e.key) {
                 case 'ArrowLeft':
                   newLeft = Math.max(0, el.left - step);
@@ -731,7 +731,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
                   newTop = Math.min(100 - el.height, el.top + step);
                   break;
               }
-              
+
               return { ...el, left: newLeft, top: newTop };
             }),
           };
@@ -752,7 +752,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
   const renderElement = (element: WireframeElement) => {
     const isSelected = selectedElement === element.id;
     const content = layout.content;
-    
+
     const style = {
       position: 'absolute' as const,
       left: `${element.left}%`,
@@ -802,7 +802,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             onMouseDown={(e) => handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
           >
-            <h1 
+            <h1
               ref={(el) => el && editableRefs.current.set(element.id, el)}
               contentEditable={editingText === element.id}
               suppressContentEditableWarning
@@ -824,7 +824,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             )}
           </div>
         );
-        
+
         return isEditMode ? (
           <ContextMenu key={element.id}>
             <ContextMenuTrigger asChild>
@@ -865,7 +865,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             onMouseDown={(e) => handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
           >
-            <p 
+            <p
               ref={(el) => el && editableRefs.current.set(element.id, el)}
               contentEditable={editingText === element.id}
               suppressContentEditableWarning
@@ -887,7 +887,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             )}
           </div>
         );
-        
+
         return isEditMode ? (
           <ContextMenu key={element.id}>
             <ContextMenuTrigger asChild>
@@ -921,7 +921,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
 
       case 'persona':
         const isHuman = element.personType === 'human';
-        
+
         if (isHuman) {
           return (
             <div
@@ -930,7 +930,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
               className={cn(commonClasses, "flex items-end justify-center")}
               onMouseDown={(e) => handleMouseDown(e, element.id)}
             >
-              <img 
+              <img
                 src={personaIcon}
                 alt="Persona"
                 className="w-full h-full object-contain opacity-80"
@@ -1016,7 +1016,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             onMouseDown={(e) => handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
           >
-            <p 
+            <p
               ref={(el) => el && editableRefs.current.set(element.id, el)}
               contentEditable={editingText === element.id}
               suppressContentEditableWarning
@@ -1038,7 +1038,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             )}
           </div>
         );
-        
+
         return isEditMode ? (
           <ContextMenu key={element.id}>
             <ContextMenuTrigger asChild>
@@ -1070,6 +1070,36 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
           </ContextMenu>
         ) : textElement;
 
+      case 'image':
+        return (
+          <div
+            key={element.id}
+            style={style}
+            className={cn(commonClasses, "flex items-center justify-center overflow-hidden bg-gray-100")}
+            onMouseDown={(e) => handleMouseDown(e, element.id)}
+          >
+            {element.src ? (
+              <img
+                src={element.src}
+                alt="Content"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gray-400">
+                <Layout className="h-8 w-8 mb-2" />
+                <span className="text-xs">Imagem</span>
+              </div>
+            )}
+            {isSelected && isEditMode && (
+              <ResizeHandles
+                onResize={handleResize}
+                onResizeStart={handleResizeStart}
+                onResizeEnd={handleResizeEnd}
+              />
+            )}
+          </div>
+        );
+
       case 'news-title':
         const newsTitleElement = (
           <div
@@ -1079,7 +1109,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             onMouseDown={(e) => handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
           >
-            <h1 
+            <h1
               ref={(el) => el && editableRefs.current.set(element.id, el)}
               contentEditable={editingText === element.id}
               suppressContentEditableWarning
@@ -1101,7 +1131,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             )}
           </div>
         );
-        
+
         return isEditMode ? (
           <ContextMenu key={element.id}>
             <ContextMenuTrigger asChild>
@@ -1142,7 +1172,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             onMouseDown={(e) => handleMouseDown(e, element.id)}
             onClick={(e) => handleTextClick(e, element.id)}
           >
-            <p 
+            <p
               ref={(el) => el && editableRefs.current.set(element.id, el)}
               contentEditable={editingText === element.id}
               suppressContentEditableWarning
@@ -1164,7 +1194,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
             )}
           </div>
         );
-        
+
         return isEditMode ? (
           <ContextMenu key={element.id}>
             <ContextMenuTrigger asChild>
@@ -1235,7 +1265,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
       </Card>
     );
   }
-  
+
   return (
     <Card className={cn("relative", className)}>
       <CardContent className="p-0">
@@ -1247,19 +1277,19 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
                 <Edit3 className="h-4 w-4" />
                 <span className="ml-2">{isEditMode ? 'Fechar e Salvar' : 'Editar Layout'}</span>
               </Toggle>
-              
+
               {isEditMode && (
                 <>
-                  <Toggle pressed={layout.meta.snapToGrid} onPressedChange={(pressed) => 
+                  <Toggle pressed={layout.meta.snapToGrid} onPressedChange={(pressed) =>
                     setLayout(prev => prev ? ({ ...prev, meta: { ...prev.meta, snapToGrid: pressed } }) : prev)
                   }>
                     <Grid3X3 className="h-4 w-4" />
                   </Toggle>
-                  
+
                   <Button variant="outline" size="sm" onClick={undo} disabled={undoStack.length === 0}>
                     <Undo2 className="h-4 w-4" />
                   </Button>
-                  
+
                   <Button variant="outline" size="sm" onClick={redo} disabled={redoStack.length === 0}>
                     <Redo2 className="h-4 w-4" />
                   </Button>
@@ -1290,41 +1320,41 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
                   <Layout className="h-4 w-4 mr-2" />
                   Carregar Template
                 </Button>
-                
+
                 <Button variant="outline" size="sm" onClick={addTextElement}>
                   <Edit3 className="h-4 w-4 mr-2" />
                   Adicionar Texto
                 </Button>
-                
+
                 {selectedElement && (
                   <span className="text-sm font-medium text-muted-foreground">
                     Elemento selecionado: {selectedElement}
                   </span>
                 )}
               </div>
-              
+
               {/* Fixed alignment and manipulation tools */}
               <div className="flex items-center gap-2 flex-wrap border-t pt-3">
                 <div className="flex items-center gap-1">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('left')}
                     disabled={!selectedElement}
                   >
                     <AlignLeft className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('center')}
                     disabled={!selectedElement}
                   >
                     <AlignCenter className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('right')}
                     disabled={!selectedElement}
                   >
@@ -1333,25 +1363,25 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('top')}
                     disabled={!selectedElement}
                   >
                     <AlignVerticalJustifyStart className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('middle')}
                     disabled={!selectedElement}
                   >
                     <AlignVerticalJustifyCenter className="h-4 w-4" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => selectedElement && alignElements('bottom')}
                     disabled={!selectedElement}
                   >
@@ -1359,38 +1389,38 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
                   </Button>
                 </div>
 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => selectedElement && toggleElement(selectedElement, 'locked')}
                   disabled={!selectedElement}
                 >
-                  {selectedElement && layout?.elements.find(el => el.id === selectedElement)?.locked ? 
+                  {selectedElement && layout?.elements.find(el => el.id === selectedElement)?.locked ?
                     <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />
                   }
                 </Button>
 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => selectedElement && changeZIndex(selectedElement, 'up')}
                   disabled={!selectedElement}
                 >
                   <MoveUp className="h-4 w-4" />
                 </Button>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => selectedElement && changeZIndex(selectedElement, 'down')}
                   disabled={!selectedElement}
                 >
                   <MoveDown className="h-4 w-4" />
                 </Button>
 
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => selectedElement && deleteElement(selectedElement)}
                   disabled={!selectedElement}
                 >
@@ -1406,7 +1436,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
           <div
             ref={containerRef}
             className="bg-white border-2 border-dashed border-gray-300 relative"
-            style={{ 
+            style={{
               width: containerDimensions.width,
               height: containerDimensions.height
             }}
@@ -1414,7 +1444,7 @@ export const WireframeEditor: React.FC<WireframeEditorProps> = ({
           >
             {/* Grid overlay */}
             {isEditMode && layout.meta.snapToGrid && (
-              <div 
+              <div
                 className="absolute inset-0 opacity-20 pointer-events-none"
                 style={{
                   backgroundImage: `
