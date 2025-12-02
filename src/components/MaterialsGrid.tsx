@@ -225,16 +225,16 @@ export const MaterialsGrid = ({
     );
   }
 
-  return (
-    <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6", className)}>
+    return (
+      <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6", className)}>
       {localMaterials.map((material) => (
         <Tilt
+          key={material.id}
           className="w-full"
           rotationFactor={8}
           springOptions={{ stiffness: 300, damping: 30 }}
         >
           <Card
-            key={material.id}
             className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0 p-1 h-full"
             onClick={() => handleMaterialClick(material.id)}
             onMouseEnter={() => setHoveredCardId(material.id)}
