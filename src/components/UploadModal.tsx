@@ -125,6 +125,113 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
     }
   }, [selectedProject, profile]);
 
+  const renderMaterialsTab = () => (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="description-material">Descrição / Legenda</Label>
+        <Textarea
+          id="description-material"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Descreva o material ou instruções específicas..."
+          className="min-h-[80px]"
+        />
+      </div>
+
+      <div className="space-y-4">
+        <Label>Arquivos</Label>
+
+        {userRole === 'viewer' && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+            <p className="text-sm text-destructive font-medium">
+              Você não tem permissão para fazer upload de arquivos neste projeto.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Visualizadores só podem ver materiais e fazer comentários.
+            </p>
+          </div>
+        )}
+
+        <div
+          className={cn(
+            "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
+            userRole === 'viewer'
+              ? "border-muted-foreground/10 bg-muted/20"
+              : dragActive
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-primary/50"
+          )}
+          onDragEnter={userRole !== 'viewer' ? handleDrag : undefined}
+          onDragLeave={userRole !== 'viewer' ? handleDrag : undefined}
+          onDragOver={userRole !== 'viewer' ? handleDrag : undefined}
+          onDrop={userRole !== 'viewer' ? handleDrop : undefined}
+        >
+          <Upload className={cn("mx-auto h-12 w-12 mb-4", userRole === 'viewer' ? "text-muted-foreground/50" : "text-muted-foreground")} />
+          <div className="space-y-2">
+            <p className={cn("text-lg font-medium", userRole === 'viewer' && "text-muted-foreground")}>
+              {userRole === 'viewer' ? 'Upload não permitido para visualizadores' : 'Arraste arquivos aqui ou clique para selecionar'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {userRole === 'viewer' ? 'Apenas colaboradores podem fazer upload' : 'Suporta imagens, vídeos e PDFs até 2GB'}
+            </p>
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*,.pdf"
+              onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
+              className="hidden"
+              id="file-upload"
+              disabled={userRole === 'viewer'}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => document.getElementById('file-upload')?.click()}
+              disabled={userRole === 'viewer'}
+            >
+              Selecionar Arquivos
+            </Button>
+          </div>
+        </div>
+
+        {files.length > 0 && (
+          <div className="space-y-2">
+            <Label>Arquivos Selecionados ({files.length})</Label>
+            <div className="max-h-32 overflow-y-auto space-y-2">
+              {files.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-accent/50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    {getFileIcon(file)}
+                    <div>
+                      <p className="text-sm font-medium truncate max-w-[200px]">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeFile(index)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderWireframeFields = (variant: 'materials' | 'briefings') => (
     <>
       <p className="text-xs text-muted-foreground bg-background/60 border rounded-md px-3 py-2">
@@ -257,6 +364,17 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       <p className="text-xs text-muted-foreground bg-primary/5 p-3 rounded">
         💡 O wireframe será gerado automaticamente com base no tipo de layout selecionado. A logo será centralizada e o separador será incluído automaticamente.
       </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="description-briefing">Descrição / Legenda</Label>
+        <Textarea
+          id="description-briefing"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Descreva o briefing ou instruções específicas..."
+          className="min-h-[80px]"
+        />
+      </div>
     </>
   );
 
@@ -588,52 +706,23 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
         <div className="flex-1 overflow-y-auto pr-2">
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Project Selection */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="project">Escolher Projeto *</Label>
-                <Select value={selectedProject} onValueChange={setSelectedProject} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o projeto" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background border z-50">
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{project.name}</span>
-                          <span className="text-xs text-muted-foreground">{project.company_name}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="section">Seção de Destino *</Label>
-                <Select
-                  value={targetSection}
-                  onValueChange={(value: 'materials' | 'briefings') => setTargetSection(value)}
-                  disabled={!!(title.trim() || subtitle.trim() || cta.trim() || newsTitle.trim() || sourceLabel.trim() || cardText.trim())}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a seção" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background border z-50">
-                    <SelectItem value="materials">
-                      <div className="flex items-center gap-2">
-                        <Image className="h-4 w-4" />
-                        <span>Materiais</span>
+            <div className="space-y-2">
+              <Label htmlFor="project">Escolher Projeto *</Label>
+              <Select value={selectedProject} onValueChange={setSelectedProject} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o projeto" />
+                </SelectTrigger>
+                <SelectContent className="bg-background border z-50">
+                  {projects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{project.name}</span>
+                        <span className="text-xs text-muted-foreground">{project.company_name}</span>
                       </div>
                     </SelectItem>
-                    <SelectItem value="briefings">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        <span>Briefings</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Material Info */}
@@ -663,7 +752,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                   </TabsList>
                 </div>
                 <TabsContent value="materials" className="space-y-4">
-                  {targetSection === 'materials' && renderWireframeFields('materials')}
+                  {targetSection === 'materials' && renderMaterialsTab()}
                 </TabsContent>
                 <TabsContent value="briefings" className="space-y-4">
                   {targetSection === 'briefings' && renderWireframeFields('briefings')}
@@ -684,17 +773,6 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição / Legenda</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Descreva o material ou instruções específicas..."
-                className="min-h-[80px]"
-              />
-            </div>
-
             {/* Toggle Em Veiculação / Disponível */}
             <div className="space-y-2 p-4 bg-muted/20 rounded-lg border">
               <Label className="text-sm font-medium">Status de Veiculação</Label>
@@ -713,100 +791,6 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                   {isRunning ? 'Marcar como Disponível' : 'Marcar como Em Veiculação'}
                 </Button>
               </div>
-            </div>
-
-            {/* File Upload */}
-            <div className="space-y-4">
-              <Label>Arquivos</Label>
-
-              {userRole === 'viewer' && (
-                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
-                  <p className="text-sm text-destructive font-medium">
-                    Você não tem permissão para fazer upload de arquivos neste projeto.
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Visualizadores só podem ver materiais e fazer comentários.
-                  </p>
-                </div>
-              )}
-
-              <div
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-                  userRole === 'viewer'
-                    ? "border-muted-foreground/10 bg-muted/20"
-                    : dragActive
-                      ? "border-primary bg-primary/5"
-                      : "border-muted-foreground/25 hover:border-primary/50"
-                )}
-                onDragEnter={userRole !== 'viewer' ? handleDrag : undefined}
-                onDragLeave={userRole !== 'viewer' ? handleDrag : undefined}
-                onDragOver={userRole !== 'viewer' ? handleDrag : undefined}
-                onDrop={userRole !== 'viewer' ? handleDrop : undefined}
-              >
-                <Upload className={cn("mx-auto h-12 w-12 mb-4", userRole === 'viewer' ? "text-muted-foreground/50" : "text-muted-foreground")} />
-                <div className="space-y-2">
-                  <p className={cn("text-lg font-medium", userRole === 'viewer' && "text-muted-foreground")}>
-                    {userRole === 'viewer' ? 'Upload não permitido para visualizadores' : 'Arraste arquivos aqui ou clique para selecionar'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {userRole === 'viewer' ? 'Apenas colaboradores podem fazer upload' : 'Suporta imagens, vídeos e PDFs até 2GB'}
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,video/*,.pdf"
-                    onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
-                    className="hidden"
-                    id="file-upload"
-                    disabled={userRole === 'viewer'}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => document.getElementById('file-upload')?.click()}
-                    disabled={userRole === 'viewer'}
-                  >
-                    Selecionar Arquivos
-                  </Button>
-                </div>
-              </div>
-
-              {/* File List */}
-              {files.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Arquivos Selecionados ({files.length})</Label>
-                  <div className="max-h-32 overflow-y-auto space-y-2">
-                    {files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-accent/50 rounded-lg"
-                      >
-                        <div className="flex items-center space-x-3">
-                          {getFileIcon(file)}
-                          <div>
-                            <p className="text-sm font-medium truncate max-w-[200px]">
-                              {file.name}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatFileSize(file.size)}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeFile(index)}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Actions */}
