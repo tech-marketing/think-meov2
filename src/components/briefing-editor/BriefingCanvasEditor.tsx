@@ -125,7 +125,7 @@ export const BriefingCanvasEditor: React.FC<BriefingCanvasEditorProps> = ({
     const singleSlide = wireframeData?.slides?.length === 1 && !wireframeData?.isCarousel;
     const imageUrl = wireframeData?.slides?.[0]?.imageUrl || fileUrl;
 
-    if (singleSlide && imageUrl && !hasObjects) {
+    if ((singleSlide || (!wireframeData?.slides && !!fileUrl)) && imageUrl && !hasObjects) {
       canvas.addImage(imageUrl);
       setAutoImageInserted(true);
     }

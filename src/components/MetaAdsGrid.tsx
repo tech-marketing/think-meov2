@@ -893,10 +893,15 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
 
       if (!profile?.company_id) throw new Error('Empresa não encontrada');
 
-      // Map format to type
-      let type = 'image';
+      // Map format to type (static/feed -> wireframe so it lives in Briefings)
+      let type: 'wireframe' | 'video' | 'carousel' = 'wireframe';
       if (format === 'reels' || format === 'video') type = 'video';
       if (format === 'carousel') type = 'carousel';
+
+      const baseImageUrl = ad.image_url || ad.video_url || payload?.criativo_analisado_url;
+      const wireframeSlides = type === 'wireframe' && baseImageUrl
+        ? [{ imageUrl: baseImageUrl, index: 0 }]
+        : null;
 
       const { data: material, error } = await supabase
         .from('materials')
@@ -904,15 +909,22 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
           company_id: profile.company_id,
           project_id: projectId,
           name: `${ad.ad_name} - ${format} (Gerando)`,
-          type: type,
+          type,
           status: 'processing', // Status especial para indicar que está gerando
-          file_url: ad.image_url || ad.video_url, // URL original como placeholder
-          thumbnail_url: ad.image_url,
+          file_url: wireframeSlides ? baseImageUrl : (ad.image_url || ad.video_url), // URL original como placeholder
+          thumbnail_url: ad.image_url || (Array.isArray(payload?.media_urls) ? payload.media_urls?.[0] : undefined),
           caption: payload.legenda,
           created_by: profile.id,
           // Marcar como briefing para aparecer na seção de Briefings e não em Materiais
           is_briefing: true,
           briefing_approved_by_client: false,
+          wireframe_data: wireframeSlides
+            ? {
+                isCarousel: false,
+                slides: wireframeSlides,
+                slideCount: 1
+              }
+            : null,
           metadata: {
             source_ad_id: ad.id,
             source_ad_name: ad.ad_name,

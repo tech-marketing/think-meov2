@@ -42,6 +42,7 @@ export const BriefingEditorLayout = ({
   caption
 }: BriefingEditorLayoutProps) => {
   const [resolvedFileUrl, setResolvedFileUrl] = useState<string | null>(null);
+  const isVideoUrl = (url?: string | null) => !!url && url.match(/\.(mp4|mov|avi|webm)(\?.*)?$/i);
 
   // URL resolution logic
   useEffect(() => {
@@ -84,20 +85,47 @@ export const BriefingEditorLayout = ({
     }
   }, [fileUrl, thumbnailUrl]);
 
-  // Parse carousel images from file_url if it's a JSON array
-  let carouselSlides = wireframeData?.slides || [];
-  // ... (carousel parsing logic)
+  // Parse carousel images from file_url if it's a JSON array or a single image
+  let parsedSlides = wireframeData?.slides || [];
+
+  if ((!parsedSlides || parsedSlides.length === 0) && fileUrl) {
+    try {
+      const maybeArray = JSON.parse(fileUrl);
+      if (Array.isArray(maybeArray)) {
+        parsedSlides = maybeArray.map((url: string, index: number) => ({
+          imageUrl: url,
+          index
+        }));
+      }
+    } catch {
+      // not JSON, continue
+    }
+
+    if ((!parsedSlides || parsedSlides.length === 0) && !isVideoUrl(fileUrl)) {
+      parsedSlides = [{ imageUrl: fileUrl, index: 0 }];
+    }
+  }
+
+  const normalizedWireframeData = parsedSlides?.length
+    ? { ...(wireframeData || {}), slides: parsedSlides, isCarousel: parsedSlides.length > 1 }
+    : wireframeData;
 
   // Use resolvedFileUrl for rendering
   const urlToUse = resolvedFileUrl || fileUrl || thumbnailUrl;
 
   // Se é um carrossel com slides, renderizar a galeria de imagens
-  if (materialType === 'carousel' && carouselSlides.length > 0) {
-    // ...
+  if (materialType === 'carousel' && parsedSlides.length > 0) {
+    return (
+      <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
+        <div className="max-w-4xl w-full">
+          <CarouselGallery slides={parsedSlides} />
+        </div>
+      </div>
+    );
   }
 
   // Se é um vídeo ou reels e tem URL, renderizar o player de vídeo
-  if ((materialType === 'video' || materialType === 'reels' || urlToUse?.match(/\.(mp4|mov|avi|webm)(\?.*)?$/i)) && urlToUse) {
+  if ((materialType === 'video' || materialType === 'reels' || isVideoUrl(urlToUse)) && urlToUse) {
     return (
       <div className="h-[calc(100vh-200px)] flex items-center justify-center bg-background p-8 overflow-auto">
         <div className="max-w-4xl w-full">
@@ -110,8 +138,8 @@ export const BriefingEditorLayout = ({
     );
   }
 
-  const singleSlide = wireframeData?.slides?.length === 1 && !wireframeData?.isCarousel;
-  const singleImageUrl = wireframeData?.slides?.[0]?.imageUrl || urlToUse;
+  const singleSlide = normalizedWireframeData?.slides?.length === 1 && !normalizedWireframeData?.isCarousel;
+  const singleImageUrl = normalizedWireframeData?.slides?.[0]?.imageUrl || urlToUse;
 
   // Fallback para canvas editor (materiais criados manualmente ou imagens únicas)
   return (
@@ -120,7 +148,7 @@ export const BriefingEditorLayout = ({
         <BriefingCanvasEditor
           content={visualizationContent}
           onChange={onVisualizationChange}
-          wireframeData={wireframeData}
+          wireframeData={normalizedWireframeData}
           fileUrl={singleSlide ? singleImageUrl : undefined}
         />
       ) : (

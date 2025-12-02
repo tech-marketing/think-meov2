@@ -581,13 +581,17 @@ export const BriefingViewer = ({
         {/* ========== VISUALIZAÇÃO DO BRIEFING ========== */}
         {(() => {
           const slidesFromWireframe = briefing.wireframe_data?.slides;
+          const derivedSingleSlide = (!slidesFromWireframe || slidesFromWireframe.length === 0) && briefing.file_url && !briefing.file_url.match(/\.(mp4|mov|avi|webm)(\?.*)?$/i)
+            ? [{ imageUrl: briefing.file_url, index: 0 }]
+            : undefined;
+          const effectiveSlides = slidesFromWireframe?.length ? slidesFromWireframe : derivedSingleSlide;
 
           // Galeria para carrossel ou quando há mais de um slide
-          if (briefing.type === 'carousel' && slidesFromWireframe) {
-            return <CarouselGallery slides={slidesFromWireframe} />;
+          if (briefing.type === 'carousel' && effectiveSlides) {
+            return <CarouselGallery slides={effectiveSlides} />;
           }
-          if (slidesFromWireframe && slidesFromWireframe.length > 1) {
-            return <CarouselGallery slides={slidesFromWireframe} />;
+          if (effectiveSlides && effectiveSlides.length > 1) {
+            return <CarouselGallery slides={effectiveSlides} />;
           }
 
           if (briefing.type === 'video' && briefing.status === 'processing') {
@@ -604,7 +608,7 @@ export const BriefingViewer = ({
             );
           }
 
-          if (briefing.type === 'wireframe') {
+          if (briefing.type === 'wireframe' || briefing.type === 'image') {
             // Se não houver slides, voltar para o editor (canvas)
             return (
               <BriefingEditorLayout
@@ -612,6 +616,11 @@ export const BriefingViewer = ({
                 projectId={projectId}
                 visualizationContent={visualizationContent}
                 onVisualizationChange={handleVisualizationChange}
+                wireframeData={effectiveSlides ? { slides: effectiveSlides, isCarousel: false } : briefing.wireframe_data}
+                materialType={briefing.type}
+                fileUrl={briefing.file_url}
+                thumbnailUrl={briefing.thumbnail_url}
+                caption={briefing.caption}
               />
             );
           }
