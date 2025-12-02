@@ -136,7 +136,7 @@ export const MaterialsGrid = ({
             className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0"
             onClick={() => handleMaterialClick(material.id)}
           >
-            <CardContent className="p-4">
+            <CardContent className="p-4 cursor-pointer">
               <div className="flex items-center space-x-4">
                 {/* Thumbnail */}
                 <div className="flex-shrink-0 w-16 h-16 relative overflow-hidden rounded-lg">
@@ -240,7 +240,7 @@ export const MaterialsGrid = ({
             onMouseEnter={() => setHoveredCardId(material.id)}
             onMouseLeave={() => setHoveredCardId(null)}
           >
-            <CardContent className="p-0">
+            <CardContent className="p-0 cursor-pointer">
               {/* Large Thumbnail with Hover Preview */}
               <div className="aspect-[4/3] relative overflow-hidden rounded-t-lg">
                 <Thumbnail
@@ -264,7 +264,7 @@ export const MaterialsGrid = ({
               </div>
 
               {/* Content */}
-              <div className="p-4 space-y-3">
+              <div className="p-4 space-y-3 cursor-pointer">
                 <div className="space-y-2">
                   {editingId === material.id ? (
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
