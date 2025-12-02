@@ -134,6 +134,7 @@ export const MaterialsGrid = ({
           <Card
             key={material.id}
             className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0"
+            style={{ cursor: 'pointer' }}
             onClick={() => handleMaterialClick(material.id)}
           >
             <CardContent className="p-4 cursor-pointer">
@@ -230,17 +231,18 @@ export const MaterialsGrid = ({
       {localMaterials.map((material) => (
         <Tilt
           key={material.id}
-          className="w-full"
+          className="w-full cursor-pointer"
           rotationFactor={8}
           springOptions={{ stiffness: 300, damping: 30 }}
         >
           <Card
             className="cursor-pointer hover:shadow-elegant transition-shadow duration-300 group bg-card/50 backdrop-blur-sm border-0 p-1 h-full"
+            style={{ cursor: 'pointer' }}
             onClick={() => handleMaterialClick(material.id)}
             onMouseEnter={() => setHoveredCardId(material.id)}
             onMouseLeave={() => setHoveredCardId(null)}
           >
-            <CardContent className="p-0 cursor-pointer">
+            <CardContent className="p-0 cursor-pointer" style={{ cursor: 'pointer' }}>
               {/* Large Thumbnail with Hover Preview */}
               <div className="aspect-[4/3] relative overflow-hidden rounded-t-lg">
                 <Thumbnail
