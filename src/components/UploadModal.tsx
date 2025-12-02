@@ -894,6 +894,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                 onChange={(e) => setMaterialName(e.target.value)}
                 placeholder="Ex: Banner Principal - Desktop"
                 required
+                className="focus-visible:ring-0 focus-visible:ring-offset-0"
               />
             </div>
 
@@ -927,6 +928,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
                 placeholder="Link ou texto de referência..."
+                className="focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <p className="text-xs text-muted-foreground">
                 Adicione um link ou texto de referência que aparecerá acima do material
