@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, X, File, Image, Video, FileText, Newspaper, CreditCard } from "lucide-react";
+import { Upload, X, File, Image, Video, FileText, Newspaper, CreditCard, ChevronsUpDown, Building2, FolderKanban, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +25,15 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 interface UploadModalProps {
   open: boolean;
@@ -35,7 +44,13 @@ interface UploadModalProps {
 interface Project {
   id: string;
   name: string;
+  company_id: string;
   company_name: string;
+}
+
+interface Company {
+  id: string;
+  name: string;
 }
 
 export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadModalProps) => {
@@ -57,8 +72,13 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   const [cardText, setCardText] = useState("");
   const [isRunning, setIsRunning] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
+  const [companySearch, setCompanySearch] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const { profile } = useAuth();
   const { toast } = useToast();
 
@@ -380,28 +400,76 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
 
   // Carregar projetos quando o modal abrir
   useEffect(() => {
-    if (open) {
+    if (open && profile) {
       loadProjects();
     }
-  }, [open]);
+  }, [open, profile]);
+
+  useEffect(() => {
+    if (projectPopoverOpen) {
+      setActiveCompanyId(null);
+      setCompanySearch("");
+      setProjectSearch("");
+    }
+  }, [projectPopoverOpen]);
+
+  const selectedProjectData = projects.find(project => project.id === selectedProject);
 
   const loadProjects = async () => {
     try {
-      const { data, error } = await supabase
+      let companyFilter: string[] | null = null;
+      if (profile?.role !== 'admin') {
+        if (profile?.company_id) {
+          companyFilter = [profile.company_id];
+        } else if (profile?.allowed_companies && profile.allowed_companies.length > 0) {
+          companyFilter = profile.allowed_companies as string[];
+        } else {
+          companyFilter = [];
+        }
+      }
+
+      if (companyFilter && companyFilter.length === 0) {
+        setCompanies([]);
+        setProjects([]);
+        return;
+      }
+
+      let companiesQuery = supabase
+        .from("companies")
+        .select("id, name")
+        .order("name");
+
+      if (companyFilter && companyFilter.length > 0) {
+        companiesQuery = companiesQuery.in("id", companyFilter);
+      }
+
+      const { data: companiesData, error: companiesError } = await companiesQuery;
+      if (companiesError) throw companiesError;
+      setCompanies(companiesData || []);
+
+      let projectsQuery = supabase
         .from("projects")
         .select(`
           id,
           name,
+          company_id,
           companies!inner(name)
         `)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
+
+      if (companyFilter && companyFilter.length > 0) {
+        projectsQuery = projectsQuery.in('company_id', companyFilter);
+      }
+
+      const { data, error } = await projectsQuery;
 
       if (error) throw error;
 
       const formattedProjects = (data || []).map(project => ({
         id: project.id,
         name: project.name,
+        company_id: project.company_id,
         company_name: project.companies?.name || 'Empresa não encontrada'
       }));
 
@@ -708,21 +776,113 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             {/* Project Selection */}
             <div className="space-y-2">
               <Label htmlFor="project">Escolher Projeto *</Label>
-              <Select value={selectedProject} onValueChange={setSelectedProject} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o projeto" />
-                </SelectTrigger>
-                <SelectContent className="bg-background border z-50">
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{project.name}</span>
-                        <span className="text-xs text-muted-foreground">{project.company_name}</span>
+              <Popover open={projectPopoverOpen} onOpenChange={setProjectPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-between text-left font-normal border border-border bg-background focus-visible:ring-0 focus-visible:ring-offset-0",
+                      !selectedProject && "text-muted-foreground"
+                    )}
+                  >
+                    {selectedProjectData ? (
+                      <span className="flex flex-col text-left">
+                        <span className="font-medium text-foreground">{selectedProjectData.name}</span>
+                        <span className="text-xs text-muted-foreground">{selectedProjectData.company_name}</span>
+                      </span>
+                    ) : (
+                      "Selecione o projeto"
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[320px]">
+                  {!activeCompanyId ? (
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar empresas..."
+                        value={companySearch}
+                        onValueChange={setCompanySearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma empresa encontrada</CommandEmpty>
+                        <CommandGroup>
+                          {companies
+                            .filter(company =>
+                              company.name.toLowerCase().includes(companySearch.toLowerCase())
+                            )
+                            .map(company => (
+                              <CommandItem
+                                key={company.id}
+                                onSelect={() => {
+                                  setActiveCompanyId(company.id);
+                                  setProjectSearch("");
+                                }}
+                              >
+                                <Building2 className="mr-2 h-4 w-4 text-muted-foreground" />
+                                {company.name}
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  ) : (
+                    <Command>
+                      <div className="flex items-center justify-between px-2 pt-2 pb-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1"
+                          onClick={() => {
+                            setActiveCompanyId(null);
+                            setProjectSearch("");
+                          }}
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                          Empresas
+                        </Button>
+                        <span className="text-xs text-muted-foreground">
+                          {companies.find(company => company.id === activeCompanyId)?.name}
+                        </span>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                      <CommandInput
+                        placeholder="Buscar projetos..."
+                        value={projectSearch}
+                        onValueChange={setProjectSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Nenhum projeto encontrado</CommandEmpty>
+                        <CommandGroup>
+                          {projects
+                            .filter(project =>
+                              project.company_id === activeCompanyId &&
+                              project.name.toLowerCase().includes(projectSearch.toLowerCase())
+                            )
+                            .map(project => (
+                              <CommandItem
+                                key={project.id}
+                                onSelect={() => {
+                                  setSelectedProject(project.id);
+                                  setProjectPopoverOpen(false);
+                                }}
+                              >
+                                <FolderKanban className="mr-2 h-4 w-4 text-muted-foreground" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{project.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {project.company_name}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Material Info */}
@@ -745,7 +905,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                 className="space-y-4"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <Label className="text-sm font-semibold">Dados do Wireframe</Label>
+                  <Label className="text-sm font-semibold">Detalhes do upload</Label>
                   <TabsList className="grid grid-cols-2 w-full sm:w-auto rounded-md border bg-background/60">
                     <TabsTrigger value="materials">Upload de Material</TabsTrigger>
                     <TabsTrigger value="briefings">Briefing</TabsTrigger>
