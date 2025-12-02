@@ -19,6 +19,7 @@ interface Material {
   status: MaterialStatus;
   comments: number;
   thumbnail?: string;
+  file_url?: string | null;
   project?: string;
   company?: string;
   caption?: string;
@@ -141,7 +142,8 @@ export const MaterialsGrid = ({
                 <div className="flex-shrink-0 w-16 h-16 relative overflow-hidden rounded-lg">
                   <Thumbnail
                     type={material.type}
-                    thumbnail={material.thumbnail}
+                    thumbnail={material.thumbnail || material.file_url || undefined}
+                    fileUrl={material.file_url}
                     name={material.name}
                     size="md"
                     className="w-full h-full object-cover"
@@ -243,7 +245,8 @@ export const MaterialsGrid = ({
               <div className="aspect-[4/3] relative overflow-hidden rounded-t-lg">
                 <Thumbnail
                   type={material.type}
-                  thumbnail={material.thumbnail}
+                  thumbnail={material.thumbnail || material.file_url || undefined}
+                  fileUrl={material.file_url}
                   name={material.name}
                   size="xl"
                   className="w-full h-full object-cover"

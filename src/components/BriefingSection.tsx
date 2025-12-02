@@ -23,6 +23,7 @@ interface BriefingMaterial {
   comments: number;
   caption?: string;
   thumbnail?: string;
+  file_url?: string | null;
   briefing_approved_by_client?: boolean;
 }
 
@@ -108,6 +109,8 @@ export const BriefingSection = ({ projectId, onBriefingView }: BriefingSectionPr
           comments: 0, // TODO: contar comentários
           caption: briefing.caption || undefined,
           thumbnail,
+          // ensure file_url is passed through MaterialsGrid for fallback thumbnails
+          file_url: briefing.file_url,
           briefing_approved_by_client: briefing.briefing_approved_by_client
         };
       });

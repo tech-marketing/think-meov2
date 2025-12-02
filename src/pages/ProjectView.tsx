@@ -209,7 +209,7 @@ const ProjectView = () => {
           type: materialType,
           status: material.status as Material['status'],
           comments: 0, // TODO: contar comentários
-          thumbnail: material.thumbnail_url,
+          thumbnail: material.thumbnail_url || material.file_url,
           file_url: material.file_url,
           is_running: material.is_running ?? true,
           project: projectData.name,

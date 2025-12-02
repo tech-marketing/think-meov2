@@ -5,6 +5,7 @@ import { useState } from "react";
 interface ThumbnailProps {
   type: 'image' | 'video' | 'pdf' | 'wireframe' | 'carousel';
   thumbnail?: string;
+  fileUrl?: string | null;
   name: string;
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -15,6 +16,7 @@ export const Thumbnail = ({
   thumbnail,
   name,
   className,
+  fileUrl,
   size = 'md'
 }: ThumbnailProps) => {
   const [imageError, setImageError] = useState(false);
@@ -75,13 +77,16 @@ export const Thumbnail = ({
     }
   };
 
-  // Para carrossel, extrair a primeira imagem do JSON
-  let displayThumbnail = thumbnail;
-  if (thumbnail) {
+  // Escolher melhor thumbnail disponível (thumbnail -> fileUrl) e tratar JSON arrays
+  let displayThumbnail = thumbnail || fileUrl || undefined;
+  if (displayThumbnail) {
     try {
-      const parsedThumbnail = JSON.parse(thumbnail);
+      const parsedThumbnail = JSON.parse(displayThumbnail);
       if (Array.isArray(parsedThumbnail) && parsedThumbnail.length > 0) {
-        displayThumbnail = parsedThumbnail[0].url || parsedThumbnail[0];
+        const first = parsedThumbnail[0];
+        displayThumbnail = first?.imageUrl || first?.url || first;
+      } else if (parsedThumbnail?.imageUrl || parsedThumbnail?.url) {
+        displayThumbnail = parsedThumbnail.imageUrl || parsedThumbnail.url;
       }
     } catch {
       // Se não for JSON válido, usar a thumbnail original
@@ -91,7 +96,7 @@ export const Thumbnail = ({
   // Para wireframe sem thumbnail, sempre mostrar ícone
   // Para carousel, mostrar imagem se tiver thumbnail, senão ícone
   // Para PDF, sempre mostrar ícone
-  if (type === 'pdf' || (type === 'wireframe' && !displayThumbnail) || (!displayThumbnail || imageError)) {
+  if (type === 'pdf' || (!displayThumbnail || imageError)) {
     return (
       <div className={cn(
         "rounded-lg border-2 flex items-center justify-center",
@@ -131,12 +136,13 @@ export const Thumbnail = ({
         sizeClasses[size],
         className
       )}>
-        <img
+        <video
           src={displayThumbnail}
-          alt={name}
           className="w-full h-full object-cover"
           onError={() => setImageError(true)}
-          onLoad={() => setImageError(false)}
+          onLoadedData={() => setImageError(false)}
+          preload="metadata"
+          muted
         />
         <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
           <div className="w-3 h-3 border-l-4 border-white border-l-solid border-y-2 border-y-transparent ml-0.5"></div>
