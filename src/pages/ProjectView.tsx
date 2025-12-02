@@ -413,20 +413,6 @@ const ProjectView = () => {
                 </CardContent>
               </Card>
 
-              {/* Legenda/Descrição do Briefing */}
-              {currentBriefing?.caption && (
-                <Card className="border-primary/20 bg-primary-light/30">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm text-primary">Legenda/Descrição</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-foreground leading-relaxed">
-                      {currentBriefing.caption}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
               {/* Comentários do Briefing */}
               {currentBriefing?.id && (
                 <Card className="border-border">

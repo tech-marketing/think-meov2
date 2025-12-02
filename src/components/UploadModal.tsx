@@ -19,6 +19,12 @@ import { useToast } from "@/hooks/use-toast";
 import { generatePdfThumbnail, generateVideoThumbnail, generateImageThumbnail } from "@/utils/thumbnailGenerator";
 import { useMaterials } from "@/contexts/MaterialsContext";
 import { createNewsLayoutCanvas, createCardLayoutCanvas, createDefaultLayoutCanvas } from "@/utils/canvasTemplates";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface UploadModalProps {
   open: boolean;
@@ -118,6 +124,141 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       setUserRole(null);
     }
   }, [selectedProject, profile]);
+
+  const renderWireframeFields = (variant: 'materials' | 'briefings') => (
+    <>
+      <p className="text-xs text-muted-foreground bg-background/60 border rounded-md px-3 py-2">
+        {variant === 'materials'
+          ? 'Configure como o wireframe será aplicado junto ao upload deste material.'
+          : 'Ajuste o wireframe que será enviado como briefing para o time ou cliente.'}
+      </p>
+
+      <div className="space-y-2">
+        <Label htmlFor="layout-type">Tipo de Layout *</Label>
+        <Select value={layoutType} onValueChange={(value: 'default' | 'news' | 'card') => setLayoutType(value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione o tipo de layout" />
+          </SelectTrigger>
+          <SelectContent className="bg-background border z-50">
+            <SelectItem value="default">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                <span>Padrão</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="news">
+              <div className="flex items-center gap-2">
+                <Newspaper className="h-4 w-4" />
+                <span>Notícia</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="card">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4" />
+                <span>Card</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-xs text-muted-foreground">Preview do Template</Label>
+        <div className="border rounded-lg overflow-hidden bg-background">
+          <img
+            src={
+              layoutType === 'news' ? '/wireframe-templates/news.png' :
+                layoutType === 'card' ? '/wireframe-templates/card.png' :
+                  '/wireframe-templates/default.png'
+            }
+            alt={`Template ${layoutType}`}
+            className="w-full h-auto"
+          />
+        </div>
+      </div>
+
+      {layoutType === 'news' && (
+        <div className="space-y-2">
+          <Label htmlFor="news-text">Notícia</Label>
+          <Textarea
+            id="news-text"
+            value={newsTitle}
+            onChange={(e) => setNewsTitle(e.target.value)}
+            placeholder="Digite o texto principal da notícia..."
+            className="min-h-[100px]"
+          />
+          <p className="text-xs text-muted-foreground">
+            Este texto aparecerá no campo "Texto da notícia" no layout
+          </p>
+        </div>
+      )}
+
+      {layoutType === 'card' && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="card-text">Texto do Card</Label>
+            <Textarea
+              id="card-text"
+              value={cardText}
+              onChange={(e) => setCardText(e.target.value)}
+              placeholder="Digite o texto que aparecerá no card..."
+              className="min-h-[100px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este texto aparecerá na área cinza do card
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cta">Call to Action (CTA)</Label>
+            <Input
+              id="cta"
+              value={cta}
+              onChange={(e) => setCta(e.target.value)}
+              placeholder="Ex: Compre Agora"
+            />
+            <p className="text-xs text-muted-foreground">
+              Texto que aparecerá no botão preto
+            </p>
+          </div>
+        </>
+      )}
+
+      {layoutType === 'default' && (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="title">Texto Principal</Label>
+            <Textarea
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Digite o texto principal..."
+              className="min-h-[100px]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Este texto aparecerá centralizado no layout
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="cta">Call to Action (CTA)</Label>
+            <Input
+              id="cta"
+              value={cta}
+              onChange={(e) => setCta(e.target.value)}
+              placeholder="Ex: Saiba mais, Comprar agora, Fale conosco"
+            />
+            <p className="text-xs text-muted-foreground">
+              Texto que aparecerá no botão
+            </p>
+          </div>
+        </>
+      )}
+
+      <p className="text-xs text-muted-foreground bg-primary/5 p-3 rounded">
+        💡 O wireframe será gerado automaticamente com base no tipo de layout selecionado. A logo será centralizada e o separador será incluído automaticamente.
+      </p>
+    </>
+  );
 
   // Carregar projetos quando o modal abrir
   useEffect(() => {
@@ -509,136 +650,25 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
 
             {/* Wireframe Fields */}
             <div className="space-y-4 border rounded-lg p-4 bg-accent/20">
-              <Label className="text-sm font-semibold">Dados do Wireframe</Label>
-
-              {/* Tipo de Layout */}
-              <div className="space-y-2">
-                <Label htmlFor="layout-type">Tipo de Layout *</Label>
-                <Select value={layoutType} onValueChange={(value: 'default' | 'news' | 'card') => setLayoutType(value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo de layout" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background border z-50">
-                    <SelectItem value="default">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        <span>Padrão</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="news">
-                      <div className="flex items-center gap-2">
-                        <Newspaper className="h-4 w-4" />
-                        <span>Notícia</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="card">
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        <span>Card</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Preview do Template */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">Preview do Template</Label>
-                <div className="border rounded-lg overflow-hidden bg-background">
-                  <img
-                    src={
-                      layoutType === 'news' ? '/wireframe-templates/news.png' :
-                        layoutType === 'card' ? '/wireframe-templates/card.png' :
-                          '/wireframe-templates/default.png'
-                    }
-                    alt={`Template ${layoutType}`}
-                    className="w-full h-auto"
-                  />
+              <Tabs
+                value={targetSection}
+                onValueChange={(value) => setTargetSection(value as 'materials' | 'briefings')}
+                className="space-y-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <Label className="text-sm font-semibold">Dados do Wireframe</Label>
+                  <TabsList className="grid grid-cols-2 w-full sm:w-auto rounded-md border bg-background/60">
+                    <TabsTrigger value="materials">Upload de Material</TabsTrigger>
+                    <TabsTrigger value="briefings">Briefing</TabsTrigger>
+                  </TabsList>
                 </div>
-              </div>
-
-
-              {/* Campos dinâmicos baseados no tipo de layout */}
-              {layoutType === 'news' && (
-                <div className="space-y-2">
-                  <Label htmlFor="news-text">Notícia</Label>
-                  <Textarea
-                    id="news-text"
-                    value={newsTitle}
-                    onChange={(e) => setNewsTitle(e.target.value)}
-                    placeholder="Digite o texto principal da notícia..."
-                    className="min-h-[100px]"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Este texto aparecerá no campo "Texto da notícia" no layout
-                  </p>
-                </div>
-              )}
-
-              {layoutType === 'card' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="card-text">Texto do Card</Label>
-                    <Textarea
-                      id="card-text"
-                      value={cardText}
-                      onChange={(e) => setCardText(e.target.value)}
-                      placeholder="Digite o texto que aparecerá no card..."
-                      className="min-h-[100px]"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Este texto aparecerá na área cinza do card
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cta">Call to Action (CTA)</Label>
-                    <Input
-                      id="cta"
-                      value={cta}
-                      onChange={(e) => setCta(e.target.value)}
-                      placeholder="Ex: Compre Agora"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Texto que aparecerá no botão preto
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {layoutType === 'default' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Texto Principal</Label>
-                    <Textarea
-                      id="title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Digite o texto principal..."
-                      className="min-h-[100px]"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Este texto aparecerá centralizado no layout
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cta">Call to Action (CTA)</Label>
-                    <Input
-                      id="cta"
-                      value={cta}
-                      onChange={(e) => setCta(e.target.value)}
-                      placeholder="Ex: Saiba mais, Comprar agora, Fale conosco"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Texto que aparecerá no botão
-                    </p>
-                  </div>
-                </>
-              )}
-
-              <p className="text-xs text-muted-foreground bg-primary/5 p-3 rounded">
-                💡 O wireframe será gerado automaticamente com base no tipo de layout selecionado. A logo será centralizada e o separador será incluído automaticamente.
-              </p>
+                <TabsContent value="materials" className="space-y-4">
+                  {targetSection === 'materials' && renderWireframeFields('materials')}
+                </TabsContent>
+                <TabsContent value="briefings" className="space-y-4">
+                  {targetSection === 'briefings' && renderWireframeFields('briefings')}
+                </TabsContent>
+              </Tabs>
             </div>
 
             <div className="space-y-2">
