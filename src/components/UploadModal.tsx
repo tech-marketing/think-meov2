@@ -34,6 +34,17 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { FigmaImportModal } from "@/components/FigmaImportModal";
+import { Figma } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 interface UploadModalProps {
   open: boolean;
@@ -79,6 +90,8 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [companySearch, setCompanySearch] = useState("");
   const [projectSearch, setProjectSearch] = useState("");
+  const [showFigmaModal, setShowFigmaModal] = useState(false);
+  const [importedAssets, setImportedAssets] = useState<Array<{ name: string; url: string; type: 'image' | 'video' | 'pdf' }>>([]);
   const { profile } = useAuth();
   const { toast } = useToast();
 
@@ -211,6 +224,16 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             >
               Selecionar Arquivos
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full justify-center gap-2 border-dashed mt-2"
+              onClick={() => setShowFigmaModal(true)}
+              disabled={userRole === 'viewer'}
+            >
+              <Figma className="h-4 w-4" />
+              Selecionar do Figma
+            </Button>
           </div>
         </div>
 
@@ -240,6 +263,35 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
                     size="sm"
                     onClick={() => removeFile(index)}
                     className="text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {importedAssets.length > 0 && (
+          <div className="space-y-2">
+            <Label>Frames importados do Figma ({importedAssets.length})</Label>
+            <div className="max-h-40 overflow-y-auto space-y-2">
+              {importedAssets.map((asset, index) => (
+                <div
+                  key={`${asset.url}-${index}`}
+                  className="flex items-center justify-between p-3 bg-accent/40 rounded-lg"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{asset.name}</span>
+                    <span className="text-xs text-muted-foreground break-all">
+                      {asset.url.split('/').pop() || asset.url}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveImportedAsset(index)}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -521,6 +573,10 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleRemoveImportedAsset = (index: number) => {
+    setImportedAssets(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -553,7 +609,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       sourceLabel.trim() ||
       cardText.trim();
 
-    if (!hasWireframeData && files.length === 0) {
+    if (!hasWireframeData && files.length === 0 && importedAssets.length === 0) {
       toast({
         title: "Erro",
         description: "Preencha pelo menos um campo do wireframe ou adicione arquivos",
@@ -583,7 +639,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       if (projectError) throw projectError;
 
       // Se há dados de wireframe (sem arquivos), criar material wireframe
-      if (hasWireframeData && files.length === 0) {
+      if (hasWireframeData && files.length === 0 && importedAssets.length === 0) {
         // Gerar wireframe baseado no tipo de layout selecionado
         let wireframeData: any = null;
         let canvasData: string | null = null;
@@ -633,20 +689,17 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           description: "Wireframe enviado para aprovação!"
         });
       } else {
-        // Se há múltiplos arquivos, fazer upload de todos e criar um material com carrossel
-        const fileUrls = [];
+        const fileUrls: { url: string; name: string; type: 'image' | 'video' | 'pdf' }[] = [...importedAssets];
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
 
           console.log(`Fazendo upload para GCS via Edge Function: ${file.name}`);
 
-          // Criar FormData para enviar o arquivo
           const formData = new FormData();
           formData.append('file', file);
           formData.append('path', `materials/${profile.id}`);
 
-          // Chamar Edge Function para upload no GCS
           const { data: uploadResult, error: uploadError } = await supabase.functions
             .invoke('upload-to-storage', {
               body: formData
@@ -659,8 +712,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
 
           console.log(`Upload realizado com sucesso:`, uploadResult.path);
 
-          // Determinar o tipo baseado no arquivo
-          let type = 'image';
+          let type: 'image' | 'video' | 'pdf' = 'image';
           if (file.type.startsWith('video/')) {
             type = 'video';
           } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
@@ -670,25 +722,30 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           fileUrls.push({
             url: uploadResult.path,
             name: file.name,
-            type: type
+            type
           });
         }
 
-        // Criar um único material com todos os arquivos (carrossel)
+        if (fileUrls.length === 0) {
+          throw new Error('Nenhum arquivo selecionado para upload');
+        }
+
+        const isCarousel = fileUrls.length > 1;
+
         const { error: materialError } = await supabase
           .from("materials")
           .insert({
             name: materialName,
-            type: files.length > 1 ? 'carousel' : fileUrls[0].type, // Se tiver mais de 1 arquivo, é carrossel
+            type: isCarousel ? 'carousel' : fileUrls[0].type,
             status: 'pending',
             project_id: selectedProject,
             created_by: profile.id,
             company_id: projectData.company_id,
             caption: description.trim() || null,
             reference: reference.trim() || null,
-            file_url: files.length > 1 ? JSON.stringify(fileUrls) : fileUrls[0].url, // JSON para carrossel, URL única para arquivo único
-            thumbnail_url: null, // Será gerada separadamente se necessário
-            is_briefing: targetSection === 'briefings', // Use selected section
+            file_url: isCarousel ? JSON.stringify(fileUrls) : fileUrls[0].url,
+            thumbnail_url: null,
+            is_briefing: targetSection === 'briefings',
             briefing_approved_by_client: false,
             is_running: isRunning,
           });
@@ -697,12 +754,13 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
 
         toast({
           title: "Sucesso!",
-          description: `Material com ${files.length} arquivo(s) enviado para aprovação!`
+          description: `Material com ${fileUrls.length} arquivo(s) enviado para aprovação!`
         });
       }
 
       // Reset form
       setFiles([]);
+      setImportedAssets([]);
       setSelectedProject("");
       setMaterialName("");
       setDescription("");
@@ -971,6 +1029,12 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           </form>
         </div>
       </DialogContent>
+      <FigmaImportModal
+        open={showFigmaModal}
+        onOpenChange={(openState) => setShowFigmaModal(openState)}
+        onImported={(assets) => setImportedAssets(prev => [...prev, ...(assets || [])])}
+        userId={profile?.id}
+      />
     </Dialog>
   );
 };
