@@ -127,6 +127,7 @@ const ProjectView = () => {
         .from('materials')
         .select('id, name, type, status, file_url, thumbnail_url, is_running, is_briefing')
         .eq('project_id', id)
+        .eq('is_briefing', false) // Excluir briefings (aparecem somente na seção Briefings)
         .order('created_at', { ascending: false });
 
       if (materialsError) throw materialsError;
