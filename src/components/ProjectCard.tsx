@@ -107,7 +107,10 @@ export const ProjectCard = ({
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
                     className="text-destructive cursor-pointer"
-                    onClick={handleDeleteClick}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClick();
+                    }}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
                     Excluir projeto
@@ -170,7 +173,15 @@ export const ProjectCard = ({
           
           {materials.length > 3 && (
             <div className="text-center py-2">
-              <Button variant="ghost" size="sm" className="text-xs w-full">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-xs w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleProjectClick();
+                }}
+              >
                 <Eye className="h-3 w-3 mr-1" />
                 Ver todos ({materials.length} materiais)
               </Button>

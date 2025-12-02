@@ -2,23 +2,25 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Video } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
 import { LumaSpin } from '@/components/ui/luma-spin';
 import { Progress } from '@/components/ui/progress';
+import { useMaterials } from '@/contexts/MaterialsContext';
 interface VideoGenerationProgressProps {
   materialId: string;
   projectId: string;
+  onComplete?: () => void;
 }
 export const VideoGenerationProgress = ({
   materialId,
-  projectId
+  projectId,
+  onComplete
 }: VideoGenerationProgressProps) => {
   const [status, setStatus] = useState<'processing' | 'completed' | 'failed'>('processing');
   const [progress, setProgress] = useState(0);
   const {
     toast
   } = useToast();
-  const navigate = useNavigate();
+  const { notifyMaterialChange } = useMaterials();
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
     let progressIntervalId: NodeJS.Timeout;
@@ -43,10 +45,8 @@ export const VideoGenerationProgress = ({
             description: "Seu vídeo está pronto para visualização."
           });
 
-          // Recarregar a página para mostrar o vídeo
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+          notifyMaterialChange('updated', materialId);
+          onComplete?.();
         } else if (data.status === 'failed') {
           setStatus('failed');
           clearInterval(intervalId);
@@ -79,7 +79,7 @@ export const VideoGenerationProgress = ({
       clearInterval(intervalId);
       clearInterval(progressIntervalId);
     };
-  }, [materialId, toast, navigate]);
+  }, [materialId, toast, notifyMaterialChange, onComplete]);
 
   // Mensagens dinâmicas baseadas no progresso
   const getStatusMessage = () => {

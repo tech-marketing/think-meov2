@@ -87,7 +87,7 @@ const MetaComparisonContent = () => {
           <div className="max-w-md">
             <MetaAccountConnection
               isConnected={false}
-              onConnectionChange={() => window.location.reload()}
+              onConnectionChange={checkMetaConnection}
             />
           </div>
         </div>

@@ -725,9 +725,17 @@ All colors MUST be HSL.
   transition: all 0.3s ease;
 }
 
-.card-metric:hover .card-metric-icon {
+.card-metric--interactive {
+  cursor: pointer;
+}
+
+.card-metric--interactive:hover .card-metric-icon {
   transform: scale(1.05);
   box-shadow: 0 8px 16px rgba(110, 80, 255, 0.3);
+}
+
+.card-metric--static {
+  cursor: default;
 }
 
 /* Project Card */

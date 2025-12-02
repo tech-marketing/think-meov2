@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +21,7 @@ import { WireframePreview } from './WireframePreview';
 import { WireframeHTMLPreview } from './WireframeHTMLPreview';
 import { VideoGenerationProgress } from "./VideoGenerationProgress";
 import { CommentWithMentions } from "./CommentWithMentions";
+import { useMaterials } from "@/contexts/MaterialsContext";
 import { VideoPlayerWithCaption } from "./VideoPlayerWithCaption";
 interface Comment {
   id: string;
@@ -89,8 +89,8 @@ export const MaterialViewer = ({
   const {
     profile
   } = useAuth();
-  const navigate = useNavigate();
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const { notifyMaterialChange } = useMaterials();
 
   // Scroll automático para comentário quando há hash na URL
   useEffect(() => {
@@ -375,18 +375,8 @@ export const MaterialViewer = ({
         description: statusMessages[newStatus] || 'Status atualizado!'
       });
 
-      // Callback para recarregar dados
       onStatusUpdate?.();
-
-      // Redirecionar para seção de materiais do projeto após aprovação
-      if ((newStatus === 'internal_approval' || newStatus === 'client_approval') && projectId) {
-        setTimeout(() => {
-          navigate(`/project/${projectId}?section=materials`);
-        }, 1500);
-      } else {
-        // Atualizar página para refletir mudanças
-        setTimeout(() => window.location.reload(), 500);
-      }
+      notifyMaterialChange('updated', id);
     } catch (error) {
       console.error('Erro ao atualizar material:', error);
       toast({
@@ -720,7 +710,13 @@ export const MaterialViewer = ({
     // CRITICAL: Check for video processing status BEFORE checking for urlToUse
     // This ensures the loading screen shows instead of "Arquivo não disponível"
     if (type === 'video' && currentStatus === 'processing') {
-      return <VideoGenerationProgress materialId={id} projectId={projectId} />;
+      return (
+        <VideoGenerationProgress
+          materialId={id}
+          projectId={projectId}
+          onComplete={() => onStatusUpdate?.()}
+        />
+      );
     }
 
     // Special handling for wireframes OR materials with wireframe data but no file
@@ -896,7 +892,13 @@ export const MaterialViewer = ({
       case 'video':
         // Verificar se o vídeo está sendo gerado
         if (currentStatus === 'processing') {
-          return <VideoGenerationProgress materialId={id} projectId={projectId || ''} />;
+          return (
+            <VideoGenerationProgress
+              materialId={id}
+              projectId={projectId || ''}
+              onComplete={() => onStatusUpdate?.()}
+            />
+          );
         }
 
         // Se o vídeo está pronto, mostrar player customizado

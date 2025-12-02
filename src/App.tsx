@@ -24,6 +24,7 @@ import TaxonomyAssistant from "./pages/TaxonomyAssistant";
 import DocumentEditor from "./pages/DocumentEditor";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ const AppContent = () => {
 
   return (
     <>
+      <ScrollToTop />
       <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/" element={<ProtectedRoute><AppLayout><Index /></AppLayout></ProtectedRoute>} />

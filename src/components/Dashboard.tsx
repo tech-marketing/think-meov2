@@ -386,12 +386,12 @@ export const Dashboard = () => {
           {statsArray.map((stat, index) => {
             const IconComponent = stat.icon;
             return (
-              <Card key={index} className="card-metric group cursor-pointer">
+              <Card key={index} className="card-metric card-metric--static">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="card-metric-icon flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 p-2 sm:p-2.5 group-hover:animate-pulse">
-                    <IconComponent className="h-full w-full text-white" />
-                  </div>
+                    <div className="card-metric-icon flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 p-2 sm:p-2.5">
+                      <IconComponent className="h-full w-full text-white" />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 truncate font-body">
                         {stat.title}

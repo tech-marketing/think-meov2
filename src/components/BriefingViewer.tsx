@@ -595,7 +595,13 @@ export const BriefingViewer = ({
           }
 
           if (briefing.type === 'video' && briefing.status === 'processing') {
-            return <VideoGenerationProgress materialId={briefingId} projectId={projectId} />;
+            return (
+              <VideoGenerationProgress
+                materialId={briefingId}
+                projectId={projectId}
+                onComplete={loadBriefing}
+              />
+            );
           }
 
           if (briefing.type === 'video' && briefing.file_url) {

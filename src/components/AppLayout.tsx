@@ -19,6 +19,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     return isMenuExpanded ? '260px' : '88px';
   };
 
+  const getMainTopPadding = () => {
+    if (typeof window === 'undefined') return '48px';
+    return window.innerWidth < 768 ? '56px' : '64px';
+  };
+
   return (
     <div className="min-h-screen flex w-full relative bg-gradient-to-br from-[#6E50FF]/5 via-[#8B7FFF]/5 to-[#A78BFA]/5 dark:from-[#1a0b2e] dark:via-[#2d1b4e] dark:to-[#3d2b5e]">
       <div className="absolute inset-0 bg-background/80 backdrop-blur-3xl" />
@@ -31,10 +36,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
           
           <main 
-            className="flex-1 overflow-auto transition-all duration-300"
-            style={{ paddingLeft: getMainPadding() }}
+            className="flex-1 overflow-auto transition-all duration-300 px-3 sm:px-6 pb-8"
+            style={{ paddingLeft: getMainPadding(), paddingTop: getMainTopPadding() }}
           >
-            <div className="min-h-full flex flex-col py-4 px-3 sm:py-6 sm:px-6">
+            <div className="min-h-full flex flex-col gap-6">
               <div className="flex-1">
                 {children}
               </div>

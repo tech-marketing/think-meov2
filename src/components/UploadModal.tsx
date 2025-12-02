@@ -398,9 +398,6 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
 
       // Callback para notificar componente pai
       onMaterialUploaded?.();
-
-      // Atualizar página para refletir mudanças
-      setTimeout(() => window.location.reload(), 500);
     } catch (error: any) {
       console.error("Erro ao enviar materiais:", error);
 

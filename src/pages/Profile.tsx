@@ -11,7 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 const Profile = () => {
   const {
     profile,
-    loading
+    loading,
+    forceProfileRefresh
   } = useAuth();
   const {
     toast
@@ -81,14 +82,12 @@ const Profile = () => {
         updated_at: new Date().toISOString()
       }).eq('id', profile.id);
       if (error) throw error;
+      await forceProfileRefresh();
       toast({
         title: "Perfil atualizado",
         description: "Suas informações foram salvas com sucesso"
       });
       setIsEditing(false);
-
-      // Refresh page to update auth context
-      window.location.reload();
     } catch (error) {
       console.error('Erro ao atualizar perfil:', error);
       toast({

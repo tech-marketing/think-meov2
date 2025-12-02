@@ -121,9 +121,6 @@ export const CreateProjectModal = ({ open, onOpenChange, onProjectCreated }: Cre
       
       onOpenChange(false);
       onProjectCreated?.();
-
-      // Atualizar página para refletir mudanças
-      setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error("Erro ao criar projeto:", error);
       toast.error("Erro ao criar projeto");
