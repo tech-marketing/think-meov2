@@ -7,6 +7,223 @@ const corsHeaders = {
 };
 
 const CACHE_DURATION_DAYS = 7; // Cache válido por 7 dias
+const MAX_IMAGES_PER_AD = 3;
+const MAX_VIDEOS_PER_AD = 1;
+
+function sanitizeKeyword(keyword: string) {
+  return keyword.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+}
+
+function pemToBinary(pem: string): ArrayBuffer {
+  const base64 = pem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '');
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function signJWT(serviceAccount: any): Promise<string> {
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/devstorage.full_control',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  };
+
+  const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+
+  const privateKeyBinary = pemToBinary(serviceAccount.private_key);
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    privateKeyBinary,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(unsignedToken),
+  );
+
+  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${unsignedToken}.${encodedSignature}`;
+}
+
+async function getAccessToken(serviceAccount: any): Promise<string> {
+  const jwt = await signJWT(serviceAccount);
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to get access token: ${error}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function uploadToGCS(bucketName: string, filePath: string, fileData: Uint8Array, contentType: string, accessToken: string) {
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucketName}/o?uploadType=media&name=${encodeURIComponent(filePath)}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': contentType,
+    },
+    body: fileData as any,
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to upload to GCS: ${error}`);
+  }
+
+  return `https://storage.googleapis.com/${bucketName}/${filePath}`;
+}
+
+function extractImageUrls(raw: any): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => item?.original_image_url || item?.url || item?.image_url)
+        .filter((url: string | undefined): url is string => !!url);
+    }
+  } catch {
+    if (typeof raw === 'string' && raw.startsWith('http')) {
+      return [raw];
+    }
+  }
+  return [];
+}
+
+function extractVideoUrls(raw: any): string[] {
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    if (raw.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((url) => typeof url === 'string');
+        }
+      } catch {
+        return [];
+      }
+    }
+    return [raw];
+  }
+  if (Array.isArray(raw)) {
+    return raw.filter((url) => typeof url === 'string');
+  }
+  return [];
+}
+
+async function cacheAdAssets(
+  ad: any,
+  keyword: string,
+  bucketName: string,
+  accessToken: string,
+) {
+  const gcsImages: string[] = [];
+  const gcsVideos: string[] = [];
+
+  const imageUrls = extractImageUrls(ad.image_urls).slice(0, MAX_IMAGES_PER_AD);
+  const videoUrls = extractVideoUrls(ad.video_url).slice(0, MAX_VIDEOS_PER_AD);
+
+  const uploadAsset = async (url: string, type: 'image' | 'video') => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`⚠️ Falha ao baixar ${type} para ${ad.ad_id}: ${response.status}`);
+        return null;
+      }
+      const contentType = response.headers.get('content-type') || (type === 'video' ? 'video/mp4' : 'image/jpeg');
+      const buffer = new Uint8Array(await response.arrayBuffer());
+      const extensionFromType = contentType.includes('mp4')
+        ? 'mp4'
+        : contentType.includes('png')
+          ? 'png'
+          : contentType.includes('gif')
+            ? 'gif'
+            : 'jpg';
+      const fileName = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extensionFromType}`;
+      const path = `competitor/${keyword}/${ad.ad_id}/${type === 'video' ? 'videos' : 'images'}/${fileName}`;
+      const publicUrl = await uploadToGCS(bucketName, path, buffer, contentType, accessToken);
+      return publicUrl;
+    } catch (error) {
+      console.warn(`⚠️ Erro ao processar ${type} para ${ad.ad_id}:`, error);
+      return null;
+    }
+  };
+
+  for (const url of imageUrls) {
+    const uploaded = await uploadAsset(url, 'image');
+    if (uploaded) {
+      gcsImages.push(uploaded);
+    }
+  }
+
+  for (const url of videoUrls) {
+    const uploaded = await uploadAsset(url, 'video');
+    if (uploaded) {
+      gcsVideos.push(uploaded);
+    }
+  }
+
+  return {
+    gcsImages,
+    gcsVideos,
+  };
+}
+
+async function attachGcsAssetsToAds(ads: any[], keyword: string) {
+  const bucketName = Deno.env.get('GCS_BUCKET_NAME');
+  const gcsKey = Deno.env.get('GCS_SERVICE_ACCOUNT_KEY');
+
+  if (!bucketName || !gcsKey) {
+    console.log('⚠️ GCS credentials not configured, skipping competitor asset caching');
+    return ads;
+  }
+
+  const serviceAccount = JSON.parse(gcsKey);
+  const accessToken = await getAccessToken(serviceAccount);
+  const sanitizedKeyword = sanitizeKeyword(keyword);
+
+  for (const ad of ads) {
+    const assets = await cacheAdAssets(ad, sanitizedKeyword, bucketName, accessToken);
+    if (assets.gcsImages.length > 0) {
+      ad.gcs_image_urls = assets.gcsImages;
+    }
+    if (assets.gcsVideos.length > 0) {
+      ad.gcs_video_urls = assets.gcsVideos;
+    }
+  }
+
+  return ads;
+}
 
 // Função para converter keyword em URL da Facebook Ad Library
 function buildFacebookAdLibraryUrl(keyword: string, country = 'BR'): string {
@@ -195,7 +412,7 @@ serve(async (req) => {
         }
 
         // Processar e mapear anúncios com validação e fallback
-        const adsToInsert = ads
+        let adsToInsert = ads
           .filter((ad: any) => {
             // Validar que temos ao menos page_name
             const hasPageName = ad.pageName || ad.page_name;
@@ -239,6 +456,8 @@ serve(async (req) => {
               scraped_at: new Date().toISOString()
             };
           });
+        
+        adsToInsert = await attachGcsAssetsToAds(adsToInsert, keyword.toLowerCase());
         
         // Salvar no cache COM tratamento de erro
         if (adsToInsert.length > 0) {

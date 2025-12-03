@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+const GCS_BUCKET_NAME = Deno.env.get("GCS_BUCKET_NAME");
+const GCS_SERVICE_ACCOUNT_KEY = Deno.env.get("GCS_SERVICE_ACCOUNT_KEY");
 
 interface CreativeData {
   ad_id: string;
@@ -25,6 +27,199 @@ interface CreativeData {
 // ============================================================================
 // HELPERS: Utilitários
 // ============================================================================
+
+function sanitizeKeyword(keyword: string) {
+  if (!keyword) return "";
+  return keyword.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
+}
+
+function pemToBinary(pem: string): ArrayBuffer {
+  const base64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, "").replace(/-----END PRIVATE KEY-----/, "").replace(/\s/g, "");
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function signJWT(serviceAccount: any): Promise<string> {
+  const header = { alg: "RS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/devstorage.read_only",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+  };
+
+  const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+
+  const privateKeyBinary = pemToBinary(serviceAccount.private_key);
+  const cryptoKey = await crypto.subtle.importKey("pkcs8", privateKeyBinary, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, new TextEncoder().encode(unsignedToken));
+  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  return `${unsignedToken}.${encodedSignature}`;
+}
+
+async function getGcsAccessToken() {
+  if (!GCS_SERVICE_ACCOUNT_KEY) return null;
+  const serviceAccount = JSON.parse(GCS_SERVICE_ACCOUNT_KEY);
+  return await getAccessToken(serviceAccount);
+}
+
+async function getAccessToken(serviceAccount: any): Promise<string> {
+  const jwt = await signJWT(serviceAccount);
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to get access token: ${await response.text()}`);
+  }
+  const data = await response.json();
+  return data.access_token;
+}
+
+function extractImageUrlsFromField(value: any): string[] {
+  if (!value) return [];
+  if (typeof value === "string") {
+    if (value.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((item) => item?.original_image_url || item?.url || item?.image_url)
+            .filter((url: string | undefined): url is string => !!url);
+        }
+      } catch {
+        if (value.startsWith("http")) return [value];
+      }
+    } else if (value.startsWith("http")) {
+      return [value];
+    }
+  } else if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        return item?.original_image_url || item?.url || item?.image_url;
+      })
+      .filter((url: string | undefined): url is string => !!url);
+  }
+  return [];
+}
+
+function extractVideoUrlsFromField(value: any): string[] {
+  if (!value) return [];
+  if (typeof value === "string") {
+    if (value.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item) => typeof item === "string");
+        }
+      } catch {
+        return [];
+      }
+    }
+    return [value];
+  }
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string");
+  }
+  return [];
+}
+
+const keywordAssetCache = new Map<
+  string,
+  {
+    images: string[];
+    videos: string[];
+  }
+>();
+
+async function listKeywordAssets(keyword: string) {
+  if (!keyword || !GCS_BUCKET_NAME || !GCS_SERVICE_ACCOUNT_KEY) {
+    return { images: [] as string[], videos: [] as string[] };
+  }
+  const sanitized = sanitizeKeyword(keyword);
+  if (keywordAssetCache.has(sanitized)) {
+    return keywordAssetCache.get(sanitized)!;
+  }
+  try {
+    const accessToken = await getGcsAccessToken();
+    if (!accessToken) {
+      return { images: [], videos: [] };
+    }
+    const prefix = `competitor/${sanitized}/`;
+    let pageToken = "";
+    const images: string[] = [];
+    const videos: string[] = [];
+
+    do {
+      const url = new URL(`https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET_NAME}/o`);
+      url.searchParams.set("prefix", prefix);
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) break;
+      const data = await response.json();
+      (data.items || []).forEach((item: any) => {
+        const objectUrl = `https://storage.googleapis.com/${GCS_BUCKET_NAME}/${item.name}`;
+        if (item.name.includes("/images/")) {
+          images.push(objectUrl);
+        } else if (item.name.includes("/videos/")) {
+          videos.push(objectUrl);
+        }
+      });
+      pageToken = data.nextPageToken || "";
+    } while (pageToken);
+
+    const assets = { images, videos };
+    keywordAssetCache.set(sanitized, assets);
+    return assets;
+  } catch (error) {
+    console.warn("⚠️ Falha ao listar assets do bucket:", error);
+    return { images: [], videos: [] };
+  }
+}
+
+function getCompetitorId(record: any) {
+  return record?.ad_id || record?.adId || record?.id || record?.adID || Math.random().toString(36).slice(2);
+}
+
+async function resolveMediaForCompetitor(record: any, keyword: string) {
+  const images = [
+    ...extractImageUrlsFromField(record?.image_urls),
+    ...extractImageUrlsFromField(record?.gcs_image_urls),
+  ];
+  const videos = [
+    ...extractVideoUrlsFromField(record?.video_url),
+    ...extractVideoUrlsFromField(record?.gcs_video_urls),
+  ];
+  if (keyword) {
+    if (images.length === 0) {
+      const fallback = await listKeywordAssets(keyword);
+      images.push(...fallback.images);
+    }
+    if (videos.length === 0) {
+      const fallback = await listKeywordAssets(keyword);
+      videos.push(...fallback.videos);
+    }
+  }
+  return {
+    images: Array.from(new Set(images)),
+    videos: Array.from(new Set(videos)),
+  };
+}
 
 // Detectar se URL é de vídeo
 function isVideoUrl(url: string): boolean {
@@ -337,6 +532,12 @@ async function handleIndividualAnalysis(requestBody: any) {
       }
     }
   }
+  const competitorMediaMap = new Map<string, { images: string[]; videos: string[] }>();
+  const keywordForAssets = competitorKeyword || (allCompetitors[0]?.search_keyword ?? "");
+  for (const competitor of allCompetitors) {
+    const media = await resolveMediaForCompetitor(competitor, keywordForAssets);
+    competitorMediaMap.set(getCompetitorId(competitor), media);
+  }
 
   // ANÁLISE 1: Performance Criativa (SEMPRE executa)
   console.log("📊 Gerando análise de performance...");
@@ -540,17 +741,17 @@ async function generateMarketTrendsAnalysis(params: {
 
   for (let i = 0; i < params.allCompetitors.length; i++) {
     const ad = params.allCompetitors[i];
+    const media = competitorMediaMap.get(getCompetitorId(ad)) || { images: [], videos: [] };
     let details = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Concorrente ${i + 1}: ${ad.page_name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
-    // Indicar se há mídia visual
-    if (i < 30 && ad.image_urls && ad.image_urls.length > 0) {
+    if (imageIndex <= 30 && media.images.length > 0) {
       details += `\n🖼️ [IMAGEM VISUAL #${imageIndex} ANEXADA ABAIXO]`;
       imageIndex++;
     }
-    if (i < 5 && ad.video_urls && ad.video_urls.length > 0) {
+    if (videoIndex <= 5 && media.videos.length > 0) {
       details += `\n🎥 [VÍDEO #${videoIndex} ANEXADO ABAIXO]`;
       videoIndex++;
     }
@@ -588,15 +789,17 @@ ${competitorDetailsWithMedia.join("\n")}
 
   console.log(`📸 Iniciando upload de imagens de ${Math.min(30, params.allCompetitors.length)} competidores...`);
 
-  for (const competitor of params.allCompetitors.slice(0, 30)) {
-    if (competitor.image_urls && competitor.image_urls.length > 0) {
-      const imageUrl = competitor.image_urls[0].original_image_url;
+  let uploadedImages = 0;
+  for (const competitor of params.allCompetitors) {
+    if (uploadedImages >= 30) break;
+    const media = competitorMediaMap.get(getCompetitorId(competitor)) || { images: [] as string[], videos: [] as string[] };
+    for (const imageUrl of media.images) {
+      if (uploadedImages >= 30) break;
       if (imageUrl && !isVideoUrl(imageUrl)) {
         try {
           const { uri, mimeType } = await uploadImageToGemini(imageUrl, params.GEMINI_API_KEY);
-          contentParts.push({
-            fileData: { mimeType, fileUri: uri },
-          });
+          contentParts.push({ fileData: { mimeType, fileUri: uri } });
+          uploadedImages++;
           successfulUploads++;
           console.log(
             `✅ [${successfulUploads}/${Math.min(30, params.allCompetitors.length)}] Imagem do competidor "${competitor.page_name}" enviada: ${uri.substring(0, 60)}...`,
@@ -624,15 +827,17 @@ ${competitorDetailsWithMedia.join("\n")}
 
   console.log(`🎥 Iniciando upload de vídeos de competidores...`);
 
-  for (const competitor of params.allCompetitors.slice(0, 5)) {
-    if (competitor.video_urls && competitor.video_urls.length > 0) {
-      const videoUrl = competitor.video_urls[0]; // Pegar primeiro vídeo
+  let uploadedVideos = 0;
+  for (const competitor of params.allCompetitors) {
+    if (uploadedVideos >= 5) break;
+    const media = competitorMediaMap.get(getCompetitorId(competitor)) || { images: [], videos: [] };
+    for (const videoUrl of media.videos) {
+      if (uploadedVideos >= 5) break;
       if (videoUrl && videoUrl.trim() !== "") {
         try {
           const geminiVideoUri = await uploadVideoToGemini(videoUrl, params.GEMINI_API_KEY);
-          contentParts.push({
-            fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri },
-          });
+          contentParts.push({ fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri } });
+          uploadedVideos++;
           successfulVideoUploads++;
           console.log(
             `✅ [${successfulVideoUploads}/5] Vídeo do competidor "${competitor.page_name}" enviado: ${geminiVideoUri.substring(0, 60)}...`,
