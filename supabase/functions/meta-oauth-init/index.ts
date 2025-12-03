@@ -14,7 +14,6 @@ serve(async (req) => {
   try {
     const META_APP_ID = Deno.env.get('META_APP_ID');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     if (!META_APP_ID) {
       throw new Error('Meta App ID not configured');
@@ -26,19 +25,15 @@ serve(async (req) => {
       throw new Error('No authorization header provided');
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-    // Get current user
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-    if (userError || !user) {
+    const userId = req.headers.get('x-supabase-auth-user-id');
+    if (!userId) {
       throw new Error('Invalid user token');
     }
 
     // Construct OAuth URL
     const callbackUrl = `${supabaseUrl}/functions/v1/meta-oauth-callback`;
     const scope = encodeURIComponent("ads_read,business_management,read_insights");
-    const state = user.id; // Use user ID as state
+    const state = userId; // Use user ID as state
 
     const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?` +
       `client_id=${META_APP_ID}&` +
