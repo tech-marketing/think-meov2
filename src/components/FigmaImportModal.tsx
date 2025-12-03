@@ -58,6 +58,16 @@ export const FigmaImportModal = ({
     }
   }, [open]);
 
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'FIGMA_AUTH_SUCCESS') {
+        loadFiles();
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [userId]);
+
   const resetState = () => {
     setLoadingFiles(false);
     setLoadingFrames(false);
@@ -69,16 +79,25 @@ export const FigmaImportModal = ({
   };
 
   const handleConnectFigma = async () => {
+    if (!userId) {
+      toast({
+        title: "Erro",
+        description: "Usuário não identificado",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setAuthenticating(true);
       const { data, error } = await supabase.functions.invoke('figma-import', {
-        body: { action: 'start-auth' }
+        body: { action: 'start-auth', userId }
       });
 
       if (error) throw error;
 
       if (data?.authUrl) {
-        window.location.href = data.authUrl;
+        window.open(data.authUrl, "_blank", "width=480,height=720");
       } else {
         throw new Error('URL de autenticação não encontrada.');
       }
@@ -95,9 +114,13 @@ export const FigmaImportModal = ({
   };
 
   const handleDisconnectFigma = async () => {
+    if (!userId) {
+      return;
+    }
+
     try {
       const { error } = await supabase.functions.invoke('figma-import', {
-        body: { action: 'logout' }
+        body: { action: 'logout', userId }
       });
 
       if (error) throw error;
@@ -122,12 +145,22 @@ export const FigmaImportModal = ({
   const loadFiles = async () => {
     try {
       setLoadingFiles(true);
+      if (!userId) {
+        throw new Error("Usuário não identificado");
+      }
+
       const { data, error } = await supabase.functions.invoke('figma-import', {
-        body: { action: 'list-files' }
+        body: { action: 'list-files', userId }
       });
 
       if (error) throw error;
-      setIsAuthenticated(Boolean(data?.authenticated));
+      if (data?.authenticated === false) {
+        setIsAuthenticated(false);
+        setFiles([]);
+        return;
+      }
+
+      setIsAuthenticated(true);
       setFiles(data?.files || []);
     } catch (error) {
       console.error('Erro ao carregar arquivos do Figma:', error);
@@ -144,11 +177,21 @@ export const FigmaImportModal = ({
   const loadFrames = async (file: FigmaFile) => {
     try {
       setLoadingFrames(true);
+      if (!userId) {
+        throw new Error("Usuário não identificado");
+      }
+
       const { data, error } = await supabase.functions.invoke('figma-import', {
-        body: { action: 'list-frames', fileKey: file.key }
+        body: { action: 'list-frames', fileKey: file.key, userId }
       });
 
       if (error) throw error;
+      if (data?.authenticated === false) {
+        setIsAuthenticated(false);
+        setFrames([]);
+        return;
+      }
+
       const extractedFrames: FigmaFrame[] = [];
       (data?.pages || []).forEach((page: any) => {
         page.frames.forEach((frame: any) => {
@@ -198,6 +241,10 @@ export const FigmaImportModal = ({
       setImporting(true);
       const selectedFrames = frames.filter(frame => selectedFrameIds.includes(frame.id));
 
+      if (!userId) {
+        throw new Error("Usuário não identificado");
+      }
+
       const { data, error } = await supabase.functions.invoke('figma-import', {
         body: {
           action: 'import-frames',
@@ -208,6 +255,16 @@ export const FigmaImportModal = ({
       });
 
       if (error) throw error;
+
+      if (data?.authenticated === false) {
+        setIsAuthenticated(false);
+        toast({
+          title: "Conecte-se ao Figma",
+          description: "Sua sessão expirou. Conecte novamente ao Figma para importar frames.",
+          variant: "destructive"
+        });
+        return;
+      }
 
       onImported(data?.assets || []);
       toast({

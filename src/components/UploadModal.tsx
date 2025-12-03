@@ -207,45 +207,37 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             <p className="text-sm text-muted-foreground">
               {userRole === 'viewer' ? 'Apenas colaboradores podem fazer upload' : 'Suporta imagens, vídeos e PDFs até 2GB'}
             </p>
-            <input
-              type="file"
-              multiple
-              accept="image/*,video/*,.pdf"
-              onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
-              className="hidden"
-              id="file-upload"
-              disabled={userRole === 'viewer'}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => document.getElementById('file-upload')?.click()}
-              disabled={userRole === 'viewer'}
-            >
-              Selecionar Arquivos
-            </Button>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => document.getElementById('file-upload')?.click()}
-                disabled={userRole === 'viewer'}
-                className="flex-1"
-              >
-                Selecionar Arquivos
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 justify-center gap-2 border-dashed"
-                onClick={() => setShowFigmaModal(true)}
-                disabled={userRole === 'viewer'}
-              >
-                <Figma className="h-4 w-4" />
-                Selecionar do Figma
-              </Button>
-            </div>
           </div>
+        </div>
+        <input
+          type="file"
+          multiple
+          accept="image/*,video/*,.pdf"
+          onChange={(e) => e.target.files && handleFiles(Array.from(e.target.files))}
+          className="hidden"
+          id="file-upload"
+          disabled={userRole === 'viewer'}
+        />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => document.getElementById('file-upload')?.click()}
+            disabled={userRole === 'viewer'}
+            className="flex-1"
+          >
+            Selecionar Arquivos
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1 justify-center gap-2 border-dashed"
+            onClick={() => setShowFigmaModal(true)}
+            disabled={userRole === 'viewer'}
+          >
+            <Figma className="h-4 w-4" />
+            Selecionar do Figma
+          </Button>
         </div>
 
         {files.length > 0 && (
@@ -581,7 +573,17 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   };
 
   const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
+      const fileToRemove = files[index];
+      setFiles(prev => prev.filter((_, i) => i !== index));
+
+      if (fileToRemove && importedAssets.length > 0) {
+        const matchingAssetIndex = importedAssets.findIndex(asset =>
+          asset.name === fileToRemove.name || asset.url.includes(fileToRemove.name)
+        );
+        if (matchingAssetIndex !== -1) {
+          handleRemoveImportedAsset(matchingAssetIndex);
+        }
+      }
   };
 
   const handleRemoveImportedAsset = (index: number) => {
