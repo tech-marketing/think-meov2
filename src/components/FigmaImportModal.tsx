@@ -132,6 +132,10 @@ export const FigmaImportModal = ({
 
       setIsAuthenticated(false);
       setFiles([]);
+      setFrames([]);
+      setSelectedFile(null);
+      setSelectedFrameIds([]);
+      await loadFiles();
     } catch (error) {
       console.error('Erro ao desconectar do Figma:', error);
       toast({
@@ -164,6 +168,8 @@ export const FigmaImportModal = ({
       setFiles(data?.files || []);
     } catch (error) {
       console.error('Erro ao carregar arquivos do Figma:', error);
+      setIsAuthenticated(false);
+      setFiles([]);
       toast({
         title: "Erro",
         description: "Não foi possível carregar os arquivos do Figma",
