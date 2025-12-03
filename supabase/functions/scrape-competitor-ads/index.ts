@@ -119,7 +119,7 @@ serve(async (req) => {
           url: facebookUrl
         }
       ],
-      count: 50,
+      count: 150,
       "scrapePageAds.activeStatus": "all"
     };
 
