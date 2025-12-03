@@ -103,9 +103,10 @@ export const FigmaImportModal = ({
       }
     } catch (error) {
       console.error('Erro ao conectar ao Figma:', error);
+      const message = error instanceof Error ? error.message : undefined;
       toast({
         title: "Erro",
-        description: "Não foi possível iniciar a autenticação com o Figma",
+        description: message || "Não foi possível iniciar a autenticação com o Figma",
         variant: "destructive"
       });
     } finally {

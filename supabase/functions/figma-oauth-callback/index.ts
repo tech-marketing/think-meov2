@@ -12,9 +12,22 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: { persistSession: false },
 });
 
+function getDefaultRedirectUri() {
+  try {
+    const url = new URL(supabaseUrl);
+    const hostnameParts = url.hostname.split(".");
+    if (hostnameParts.length < 2) return null;
+    const projectId = hostnameParts[0];
+    const domain = hostnameParts.slice(1).join(".");
+    return `${url.protocol}//${projectId}.functions.${domain}/figma-oauth-callback`;
+  } catch {
+    return null;
+  }
+}
+
 const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
 const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
-const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI");
+const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getDefaultRedirectUri();
 const FIGMA_AUTH_SUCCESS_URL = Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://app.thinkmeo.com.br";
 
 serve(async (req) => {
