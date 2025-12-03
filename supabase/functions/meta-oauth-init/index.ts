@@ -14,7 +14,7 @@ serve(async (req) => {
   try {
     const META_APP_ID = Deno.env.get('META_APP_ID');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     if (!META_APP_ID) {
       throw new Error('Meta App ID not configured');
@@ -27,12 +27,10 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     // Get current user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
     if (userError || !user) {
       throw new Error('Invalid user token');
     }
