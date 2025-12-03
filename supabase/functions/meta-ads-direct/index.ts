@@ -102,6 +102,90 @@ serve(async (req) => {
     const { action } = requestBody;
     console.log(`📊 Action solicitada: ${action}`);
 
+    const CUSTOM_EVENT_ACTION_MAP: Record<string, string> = {
+      LEAD: 'lead',
+      LEAD_FORM: 'lead',
+      PURCHASE: 'purchase',
+      OFFSITE_CONVERSION: 'purchase',
+      VIEW_CONTENT: 'view_content',
+      ADD_TO_CART: 'add_to_cart',
+      ADD_PAYMENT_INFO: 'add_payment_info',
+      LANDING_PAGE_VIEW: 'landing_page_view',
+      SUBSCRIBE: 'subscribe',
+      COMPLETE_REGISTRATION: 'complete_registration',
+      SUBMIT_APPLICATION: 'submit_application',
+      CONTACT: 'contact',
+      APP_INSTALL: 'app_install'
+    };
+
+    const OBJECTIVE_ACTION_MAP: Record<string, string> = {
+      LEAD_GENERATION: 'lead',
+      OUTCOME_LEADS: 'onsite_conversion.lead_grouped',
+      OUTCOME_SALES: 'purchase',
+      OUTCOME_PURCHASE_INTENT: 'purchase',
+      CONVERSIONS: 'onsite_conversion.purchase',
+      OUTCOME_TRAFFIC: 'landing_page_view',
+      TRAFFIC: 'landing_page_view',
+      LINK_CLICKS: 'link_click',
+      OUTCOME_ENGAGEMENT: 'post_engagement',
+      MESSAGES: 'onsite_conversion.messaging_first_reply',
+      CATALOG_SALES: 'purchase',
+      SALES: 'purchase',
+      APP_PROMOTION: 'app_install'
+    };
+
+    const sumValues = (items: any[], predicate: (item: any) => boolean, parser: (value: any) => number) => {
+      if (!items || !Array.isArray(items)) return 0;
+      return items
+        .filter(predicate)
+        .reduce((sum: number, item: any) => sum + parser(item?.value), 0);
+    };
+
+    const getActionValue = (actions: any[], actionType: string): number => {
+      return sumValues(actions, (item) => item.action_type === actionType, (value) => parseInt(value || '0'));
+    };
+
+    const getCostPerActionValue = (costActions: any[], actionType: string): number => {
+      if (!costActions || !Array.isArray(costActions)) return 0;
+      const costEntry = costActions.find((a: any) => a.action_type === actionType);
+      return parseFloat(costEntry?.value || '0');
+    };
+
+    const getVideoActionValue = (videoActions: any[], actionType: string): number => {
+      return sumValues(videoActions, (item) => item.action_type === actionType, (value) => parseInt(value || '0'));
+    };
+
+    const parseResultsValue = (resultsField: any): number => {
+      if (!resultsField) return 0;
+      if (Array.isArray(resultsField)) {
+        return resultsField.reduce((sum, entry) => sum + parseInt(entry?.value || '0'), 0);
+      }
+      if (typeof resultsField === 'string') {
+        return parseInt(resultsField || '0');
+      }
+      if (typeof resultsField === 'number') {
+        return resultsField;
+      }
+      return 0;
+    };
+
+    const determineResultAction = (ad: any): string | null => {
+      const customEvent = (ad.promoted_object_custom_event_type || ad.adset_custom_event_type || '').toUpperCase();
+      if (customEvent && CUSTOM_EVENT_ACTION_MAP[customEvent]) {
+        return CUSTOM_EVENT_ACTION_MAP[customEvent];
+      }
+
+      const objective = (ad.campaign_objective || ad.adset_optimization_goal || '').toUpperCase();
+      if (objective && OBJECTIVE_ACTION_MAP[objective]) {
+        return OBJECTIVE_ACTION_MAP[objective];
+      }
+
+      if (objective.includes('LEAD')) return 'lead';
+      if (objective.includes('SALE') || objective.includes('PURCHASE')) return 'purchase';
+      if (objective.includes('TRAFFIC')) return 'landing_page_view';
+      return null;
+    };
+
     let result;
 
     if (action === 'validate') {
@@ -203,7 +287,10 @@ serve(async (req) => {
         filtering = `&filtering=[{field:"campaign.id",operator:"IN",value:[${campaignIds}]}]`;
       }
       
-      const url = `https://graph.facebook.com/v21.0/${normalizedAccountId}/ads?access_token=${ACCESS_TOKEN}${filtering}&fields=id,name,status,adset{id,name},campaign{id,name,objective},creative{image_url,video_id}&limit=500`;
+      const adsetFields = 'adset{id,name,optimization_goal,destination_type,attribution_spec,effective_status,promoted_object,custom_event_type,promoted_object{custom_event_type}}';
+      const campaignFields = 'campaign{id,name,objective}';
+      const creativeFields = 'creative{image_url,video_id}';
+      const url = `https://graph.facebook.com/v21.0/${normalizedAccountId}/ads?access_token=${ACCESS_TOKEN}${filtering}&fields=id,name,status,${adsetFields},${campaignFields},promoted_object,${creativeFields}&limit=500`;
       console.log('📋 URL da chamada (token oculto):', url.replace(ACCESS_TOKEN, '[TOKEN_HIDDEN]'));
       
       const response = await fetch(url);
@@ -223,12 +310,16 @@ serve(async (req) => {
         status: ad.status,
         adset_id: ad.adset?.id || null,
         adset_name: ad.adset?.name || null,
+        adset_optimization_goal: ad.adset?.optimization_goal || null,
+        adset_destination_type: ad.adset?.destination_type || null,
+        adset_custom_event_type: ad.adset?.custom_event_type || ad.adset?.promoted_object?.custom_event_type || null,
         campaign_id: ad.campaign?.id || null,
         campaign_name: ad.campaign?.name || null,
         campaign_objective: ad.campaign?.objective || null,
         creative_id: ad.creative?.id || null,
         image_url: ad.creative?.image_url || null,
-        video_id: ad.creative?.video_id || null
+        video_id: ad.creative?.video_id || null,
+        promoted_object_custom_event_type: ad.promoted_object?.custom_event_type || null
       }));
       
       console.log(`✅ Encontrados ${ads.length} anúncios:`, ads);
@@ -280,23 +371,6 @@ serve(async (req) => {
             const insights = insightsData.data?.[0] || {};
             
             // Helper functions to extract action values
-            const getActionValue = (actions: any[], actionType: string): number => {
-              if (!actions || !Array.isArray(actions)) return 0;
-              const action = actions.find((a: any) => a.action_type === actionType);
-              return parseInt(action?.value || '0');
-            };
-
-            const getCostPerActionValue = (costActions: any[], actionType: string): number => {
-              if (!costActions || !Array.isArray(costActions)) return 0;
-              const costAction = costActions.find((a: any) => a.action_type === actionType);
-              return parseFloat(costAction?.value || '0');
-            };
-
-            const getVideoActionValue = (videoActions: any[], actionType: string): number => {
-              if (!videoActions || !Array.isArray(videoActions)) return 0;
-              const videoAction = videoActions.find((a: any) => a.action_type === actionType);
-              return parseInt(videoAction?.value || '0');
-            };
             
             // Calculate metrics from various sources
             let conversions = 0;
@@ -305,29 +379,28 @@ serve(async (req) => {
             let lpv = 0;
             let thruplays = 0;
             let results = 0;
+            const resultActionType = determineResultAction(ad);
             
-            // Extract results directly from insights (respects campaign objective)
-            if (insights.results && Array.isArray(insights.results)) {
-              // Results can be an array like actions
-              results = insights.results.reduce((sum: number, result: any) => {
-                return sum + (parseInt(result.value || '0'));
-              }, 0);
-            } else if (typeof insights.results === 'string') {
-              // Sometimes it's a direct string value
-              results = parseInt(insights.results || '0');
-            } else if (typeof insights.results === 'number') {
-              // Or a direct number
-              results = insights.results;
+            if (resultActionType) {
+              results = getActionValue(insights.actions, resultActionType);
+            }
+            
+            if (!results) {
+              results = parseResultsValue(insights.results);
             }
             
             // Extract conversions and engagements from actions
             if (insights.actions) {
-              conversions =
-                getActionValue(insights.actions, 'lead') +
-                getActionValue(insights.actions, 'purchase') +
-                getActionValue(insights.actions, 'complete_registration') +
-                getActionValue(insights.actions, 'submit_application') +
-                getActionValue(insights.actions, 'contact');
+              if (resultActionType) {
+                conversions = getActionValue(insights.actions, resultActionType);
+              } else {
+                conversions =
+                  getActionValue(insights.actions, 'lead') +
+                  getActionValue(insights.actions, 'purchase') +
+                  getActionValue(insights.actions, 'complete_registration') +
+                  getActionValue(insights.actions, 'submit_application') +
+                  getActionValue(insights.actions, 'contact');
+              }
 
               // LPVs from actions
               lpv = getActionValue(insights.actions, 'landing_page_view');
@@ -365,10 +438,10 @@ serve(async (req) => {
               ctr: (insights.inline_link_click_ctr ? parseFloat(insights.inline_link_click_ctr) : (impressions > 0 ? (linkClicks / impressions) * 100 : 0)),
               cpc: (insights.cpc ? parseFloat(insights.cpc) : (linkClicks > 0 ? spend / linkClicks : 0)),
               spend,
-              results: results, // Use native Meta API results field
+              results: results,
               cost_per_result: results > 0 ? spend / results : 0,
-              conversions,
-              conversion_rate: linkClicks > 0 ? (conversions / linkClicks) * 100 : 0,
+              conversions: conversions || results,
+              conversion_rate: linkClicks > 0 ? ((results || conversions) / linkClicks) * 100 : 0,
               roas: spend > 0 ? conversionValue / spend : 0,
               reach,
               frequency: parseFloat(insights.frequency) || 0,
