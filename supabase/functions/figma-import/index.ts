@@ -165,7 +165,7 @@ serve(async (req) => {
 
     if (action === "list-files") {
       const data = await fetchFromFigma("me/files");
-      return respond({ files: data?.files || [] });
+      return respond({ files: data?.files || [], authenticated: true });
     }
 
     if (action === "list-frames") {
@@ -237,3 +237,25 @@ serve(async (req) => {
     return respond({ error: (error as Error).message }, 400);
   }
 });
+    if (action === "start-auth") {
+      const clientId = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
+      const redirectUri = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI");
+      if (!clientId || !redirectUri) {
+        throw new Error("FIGMA_OAUTH_CLIENT_ID ou FIGMA_OAUTH_REDIRECT_URI não configurados");
+      }
+
+      const state = crypto.randomUUID();
+      const scopes = ["files:read"].join(" ");
+      const authUrl =
+        `https://www.figma.com/oauth?client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&state=${state}&response_type=code`;
+
+      return respond({ authUrl });
+    }
+
+    if (action === "logout") {
+      // Caso haja lógica de sessão futura, pode ser adicionada aqui.
+      return respond({ success: true });
+    }

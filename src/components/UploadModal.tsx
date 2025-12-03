@@ -224,16 +224,27 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             >
               Selecionar Arquivos
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-center gap-2 border-dashed mt-2"
-              onClick={() => setShowFigmaModal(true)}
-              disabled={userRole === 'viewer'}
-            >
-              <Figma className="h-4 w-4" />
-              Selecionar do Figma
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => document.getElementById('file-upload')?.click()}
+                disabled={userRole === 'viewer'}
+                className="flex-1"
+              >
+                Selecionar Arquivos
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 justify-center gap-2 border-dashed"
+                onClick={() => setShowFigmaModal(true)}
+                disabled={userRole === 'viewer'}
+              >
+                <Figma className="h-4 w-4" />
+                Selecionar do Figma
+              </Button>
+            </div>
           </div>
         </div>
 

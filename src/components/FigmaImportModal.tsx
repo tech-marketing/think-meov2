@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, FileStack, Images, RefreshCw } from "lucide-react";
+import { Loader2, FileStack, Images, RefreshCw, Figma } from "lucide-react";
 
 interface FigmaFile {
   key: string;
@@ -43,6 +43,8 @@ export const FigmaImportModal = ({
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [loadingFrames, setLoadingFrames] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [files, setFiles] = useState<FigmaFile[]>([]);
   const [frames, setFrames] = useState<FigmaFrame[]>([]);
   const [selectedFile, setSelectedFile] = useState<FigmaFile | null>(null);
@@ -66,6 +68,57 @@ export const FigmaImportModal = ({
     setSelectedFrameIds([]);
   };
 
+  const handleConnectFigma = async () => {
+    try {
+      setAuthenticating(true);
+      const { data, error } = await supabase.functions.invoke('figma-import', {
+        body: { action: 'start-auth' }
+      });
+
+      if (error) throw error;
+
+      if (data?.authUrl) {
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error('URL de autenticação não encontrada.');
+      }
+    } catch (error) {
+      console.error('Erro ao conectar ao Figma:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível iniciar a autenticação com o Figma",
+        variant: "destructive"
+      });
+    } finally {
+      setAuthenticating(false);
+    }
+  };
+
+  const handleDisconnectFigma = async () => {
+    try {
+      const { error } = await supabase.functions.invoke('figma-import', {
+        body: { action: 'logout' }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sessão encerrada",
+        description: "Sua conta do Figma foi desconectada."
+      });
+
+      setIsAuthenticated(false);
+      setFiles([]);
+    } catch (error) {
+      console.error('Erro ao desconectar do Figma:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível desconectar do Figma",
+        variant: "destructive"
+      });
+    }
+  };
+
   const loadFiles = async () => {
     try {
       setLoadingFiles(true);
@@ -74,6 +127,7 @@ export const FigmaImportModal = ({
       });
 
       if (error) throw error;
+      setIsAuthenticated(Boolean(data?.authenticated));
       setFiles(data?.files || []);
     } catch (error) {
       console.error('Erro ao carregar arquivos do Figma:', error);
@@ -191,24 +245,68 @@ export const FigmaImportModal = ({
         <div className="grid gap-6">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label>Arquivos recentes</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-2"
-                onClick={loadFiles}
-                disabled={loadingFiles}
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar
-              </Button>
+              <div className="space-y-1">
+                <Label>Arquivos recentes</Label>
+                {!isAuthenticated && (
+                  <p className="text-xs text-muted-foreground">
+                    Conecte-se para ver seus arquivos do Figma.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {isAuthenticated && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2"
+                    onClick={handleDisconnectFigma}
+                  >
+                    Sair
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2"
+                  onClick={loadFiles}
+                  disabled={loadingFiles}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Atualizar
+                </Button>
+              </div>
             </div>
             <ScrollArea className="h-40 rounded-md border">
               {loadingFiles ? (
                 <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Carregando arquivos...
+                </div>
+              ) : !isAuthenticated ? (
+                <div className="py-8 px-4 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Conecte sua conta do Figma para acessar seus arquivos e frames.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleConnectFigma}
+                    disabled={authenticating}
+                    className="w-full justify-center gap-2"
+                  >
+                    {authenticating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Conectando...
+                      </>
+                    ) : (
+                      <>
+                        <Figma className="h-4 w-4" />
+                        Conectar ao Figma
+                      </>
+                    )}
+                  </Button>
                 </div>
               ) : files.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
