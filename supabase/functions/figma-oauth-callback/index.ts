@@ -38,7 +38,19 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // userId
+    const rawState = url.searchParams.get("state");
+    let stateProfileId: string | null = null;
+    let stateOrigin: string | null = null;
+
+    if (rawState) {
+      try {
+        const decoded = JSON.parse(decodeURIComponent(rawState));
+        stateProfileId = decoded?.profileId || null;
+        stateOrigin = decoded?.origin || null;
+      } catch {
+        stateProfileId = rawState;
+      }
+    }
     const errorParam = url.searchParams.get("error");
 
     if (errorParam) {
@@ -46,7 +58,7 @@ serve(async (req) => {
       return htmlResponse("Ocorreu um erro ao conectar com o Figma. Você já pode fechar esta janela.");
     }
 
-    if (!code || !state) {
+    if (!code || !stateProfileId) {
       return htmlResponse("Requisição inválida.");
     }
 
@@ -77,11 +89,14 @@ serve(async (req) => {
       : null;
 
     await supabaseAdmin.from("figma_tokens").upsert({
-      user_id: state,
+      user_id: stateProfileId,
       access_token: tokenData.access_token,
       refresh_token: tokenData.refresh_token || null,
       expires_at: expiresAt,
     });
+
+    const postMessageOrigin = stateOrigin || "*";
+    const fallbackUrl = FIGMA_AUTH_SUCCESS_URL || "";
 
     const redirectHtml = `
       <html>
@@ -89,11 +104,21 @@ serve(async (req) => {
           <p>Autenticação concluída! Você já pode fechar esta janela.</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'FIGMA_AUTH_SUCCESS' }, '*');
+              try {
+                window.opener.postMessage({ type: 'FIGMA_AUTH_SUCCESS' }, ${JSON.stringify(postMessageOrigin)});
+              } catch (postMessageError) {
+                console.warn('Falha ao enviar mensagem para janela principal:', postMessageError);
+              }
             }
             setTimeout(() => {
               window.close();
-            }, 1000);
+              setTimeout(() => {
+                var redirectUrl = ${JSON.stringify(fallbackUrl)};
+                if (!window.closed && redirectUrl) {
+                  window.location.href = redirectUrl;
+                }
+              }, 600);
+            }, 600);
           </script>
         </body>
       </html>

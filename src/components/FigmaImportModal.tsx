@@ -70,6 +70,7 @@ export const FigmaImportModal = ({
           }
           popupRef.current = null;
         }
+        setIsAuthenticated(true);
         loadFiles();
       }
     };
@@ -104,7 +105,7 @@ export const FigmaImportModal = ({
     try {
       setAuthenticating(true);
       const { data, error } = await supabase.functions.invoke('figma-import', {
-        body: { action: 'start-auth', userId }
+        body: { action: 'start-auth', userId, origin: window.location.origin }
       });
 
       if (error) throw error;

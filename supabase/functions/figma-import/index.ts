@@ -28,6 +28,7 @@ function getDefaultRedirectUri() {
 const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
 const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
 const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getDefaultRedirectUri();
+const actionsRequiringUser = new Set(["start-auth", "logout", "list-files", "list-frames", "import-frames"]);
 
 interface FigmaTokenRow {
   user_id: string;
@@ -120,6 +121,32 @@ async function getValidToken(userId: string) {
   return tokenRow.access_token;
 }
 
+async function resolveProfileId(explicitUserId: string | undefined, authHeader: string | null) {
+  if (explicitUserId) {
+    return explicitUserId;
+  }
+
+  if (!authHeader) return null;
+  const token = authHeader.replace("Bearer", "").trim();
+  if (!token) return null;
+
+  try {
+    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+    if (!user) return null;
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("user_id", user.id)
+      .single();
+
+    return profile?.id || null;
+  } catch (error) {
+    console.error("Erro ao resolver usuário do Figma:", error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -128,26 +155,31 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const action = body?.action;
-    const userId = body?.userId as string | undefined;
+    const providedUserId = body?.userId as string | undefined;
+    const requestOrigin = body?.origin as string | undefined;
+    const authHeader = req.headers.get("Authorization");
+
+    const resolvedUserId = actionsRequiringUser.has(action)
+      ? await resolveProfileId(providedUserId, authHeader)
+      : null;
 
     if (!action) {
       throw new Error("Ação não informada");
     }
 
-    if (["list-files", "list-frames", "import-frames", "logout"].includes(action) && !userId) {
-      throw new Error("userId é obrigatório para esta ação");
+    if (actionsRequiringUser.has(action) && !resolvedUserId) {
+      throw new Error("Usuário não autenticado");
     }
 
     if (action === "start-auth") {
       if (!FIGMA_CLIENT_ID || !FIGMA_REDIRECT_URI) {
         throw new Error("Configurações de OAuth do Figma ausentes");
       }
-
-      if (!userId) {
-        throw new Error("userId é obrigatório para autenticação");
-      }
-
-      const state = userId;
+      const statePayload = {
+        profileId: resolvedUserId,
+        origin: requestOrigin || req.headers.get("origin") || "",
+      };
+      const encodedState = encodeURIComponent(JSON.stringify(statePayload));
       const scopes = [
         "current_user:read",
         "file_content:read",
@@ -158,18 +190,18 @@ serve(async (req) => {
         `https://www.figma.com/oauth?client_id=${encodeURIComponent(FIGMA_CLIENT_ID)}` +
         `&redirect_uri=${encodeURIComponent(FIGMA_REDIRECT_URI)}` +
         `&scope=${encodeURIComponent(scopes)}` +
-        `&response_type=code&state=${state}`;
+        `&response_type=code&state=${encodedState}`;
 
       return respond({ authUrl });
     }
 
     if (action === "logout") {
-      await supabaseAdmin.from("figma_tokens").delete().eq("user_id", userId);
+      await supabaseAdmin.from("figma_tokens").delete().eq("user_id", resolvedUserId!);
       return respond({ success: true });
     }
 
     if (action === "list-files") {
-      const accessToken = await getValidToken(userId!);
+      const accessToken = await getValidToken(resolvedUserId!);
       if (!accessToken) {
         return respond({ files: [], authenticated: false });
       }
@@ -179,7 +211,7 @@ serve(async (req) => {
     }
 
     if (action === "list-frames") {
-      const accessToken = await getValidToken(userId!);
+      const accessToken = await getValidToken(resolvedUserId!);
       if (!accessToken) {
         return respond({ pages: [], authenticated: false });
       }
@@ -204,7 +236,7 @@ serve(async (req) => {
     }
 
     if (action === "import-frames") {
-      const accessToken = await getValidToken(userId!);
+      const accessToken = await getValidToken(resolvedUserId!);
       if (!accessToken) {
         return respond({ authenticated: false, assets: [] });
       }
@@ -241,7 +273,7 @@ serve(async (req) => {
         }
 
         const buffer = new Uint8Array(await imageResp.arrayBuffer());
-        const path = `materials/${userId || "figma"}/figma/${frame.id}-${Date.now()}.png`;
+        const path = `materials/${resolvedUserId || "figma"}/figma/${frame.id}-${Date.now()}.png`;
         const publicUrl = await uploadToGCS(GCS_BUCKET_NAME, path, buffer, "image/png", gcsAccessToken);
 
         assets.push({
