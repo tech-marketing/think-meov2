@@ -148,7 +148,12 @@ serve(async (req) => {
       }
 
       const state = userId;
-      const scopes = ["files:read"].join(" ");
+      const scopes = [
+        "current_user:read",
+        "file_content:read",
+        "file_metadata:read",
+        "projects:read",
+      ].join(" ");
       const authUrl =
         `https://www.figma.com/oauth?client_id=${encodeURIComponent(FIGMA_CLIENT_ID)}` +
         `&redirect_uri=${encodeURIComponent(FIGMA_REDIRECT_URI)}` +
