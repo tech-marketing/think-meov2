@@ -58,8 +58,9 @@ export const MetaAdsDirectFilterPanel: React.FC = () => {
 
     // Se houver keyword de análise competitiva, buscar primeiro
     if (competitorKeyword && competitorKeyword.trim().length >= 3) {
-      console.log(`🎯 Iniciando busca competitiva para: "${competitorKeyword}"`);
-      await fetchCompetitorAds(competitorKeyword.trim());
+      const normalizedKeyword = competitorKeyword.trim().toLowerCase();
+      console.log(`🎯 Iniciando busca competitiva para: "${competitorKeyword}" (normalizada: ${normalizedKeyword})`);
+      await fetchCompetitorAds(normalizedKeyword, true);
     }
 
     // Buscar dados normais do Meta

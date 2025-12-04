@@ -413,6 +413,8 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
       const videoFileUrl = materialData?.file_url?.includes('.mp4') ? materialData.file_url : ad.video_url || null;
 
       // Executar chamada da IA em paralelo
+      const normalizedCompetitorKeyword = competitorKeyword?.trim().toLowerCase() || null;
+
       console.log('🎯 Enviando para análise:', {
         adName: ad.ad_name,
         hasImage: !!localFileUrl,
@@ -428,7 +430,7 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
         metricsKeys: ad.metrics ? Object.keys(ad.metrics) : [],
         hasImageUrl: !!localFileUrl,
         hasVideoUrl: !!videoFileUrl,
-        competitorKeyword: competitorKeyword || 'não fornecido',
+        competitorKeyword: normalizedCompetitorKeyword || 'não fornecido',
         allAdsCount: allAdsMetrics.length,
         selectedMetricsCount: selectedMetrics.length
       });
@@ -442,7 +444,7 @@ export const MetaAdsGrid: React.FC<MetaAdsGridProps> = ({
           metrics: ad.metrics,
           image_url: localFileUrl,
           video_url: videoFileUrl,
-          competitor_keyword: competitorKeyword,
+          competitor_keyword: normalizedCompetitorKeyword,
           all_ads_metrics: allAdsMetrics,
           selected_metrics: selectedMetrics
           // ✅ NÃO incluir: creatives, analysisType, custom_prompt

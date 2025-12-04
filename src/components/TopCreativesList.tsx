@@ -449,13 +449,15 @@ export const TopCreativesList: React.FC<TopCreativesListProps> = ({
         ...adsWithoutMaterial
       ];
 
+      const normalizedCompetitorKeyword = competitorKeyword?.trim().toLowerCase() || null;
+
       const { data, error } = await supabase.functions.invoke('analyze-creative', {
         body: {
           creatives: allCreatives,
           analysisType: type,
           primaryMetric,
           secondaryMetric,
-          competitor_keyword: competitorKeyword, // Passar keyword ao invés de array
+          competitor_keyword: normalizedCompetitorKeyword, // Passar keyword normalizada
           context: {
             total_ads: targetAds.length,
             ads_with_visual: adsWithLocalMaterial.length,

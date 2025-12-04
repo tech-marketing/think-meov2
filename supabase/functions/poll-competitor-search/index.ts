@@ -118,7 +118,8 @@ serve(async (req) => {
       }
 
       const ads = await datasetResponse.json();
-      console.log(`✅ Recebidos ${ads.length} anúncios`);
+      const datasetAds = Array.isArray(ads) ? ads.slice(0, 100) : [];
+      console.log(`✅ Recebidos ${datasetAds.length} anúncios (limitado aos 100 mais recentes)`);
 
       // Buscar keyword do histórico
       let keyword = '';
@@ -131,17 +132,17 @@ serve(async (req) => {
           .eq('id', searchId)
           .single();
 
-        keyword = history?.search_keyword || '';
+        keyword = (history?.search_keyword || '').toLowerCase();
         niche = history?.search_niche || '';
       }
 
       // Log da estrutura real dos dados do Apify (primeiro anúncio)
-      if (ads.length > 0) {
-        console.log('🔍 [Poll] Estrutura do primeiro anúncio do Apify:', JSON.stringify(ads[0], null, 2));
+      if (datasetAds.length > 0) {
+        console.log('🔍 [Poll] Estrutura do primeiro anúncio do Apify:', JSON.stringify(datasetAds[0], null, 2));
       }
 
       // Processar e mapear anúncios com validação e fallback
-      const adsToInsert = ads
+      const adsToInsert = datasetAds
         .filter((ad: any) => {
           // Validar que temos ao menos page_name
           const hasPageName = ad.pageName || ad.page_name;

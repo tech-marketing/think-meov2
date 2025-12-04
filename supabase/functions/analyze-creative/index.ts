@@ -7,6 +7,9 @@ const corsHeaders = {
 };
 const GCS_BUCKET_NAME = Deno.env.get("GCS_BUCKET_NAME");
 const GCS_SERVICE_ACCOUNT_KEY = Deno.env.get("GCS_SERVICE_ACCOUNT_KEY");
+const MAX_MARKET_MEDIA_ATTACHMENTS = 1500;
+const MAX_COMPETITORS_FOR_ANALYSIS = 1500;
+const COMPETITOR_LOOKBACK_DAYS = 90;
 
 interface CreativeData {
   ad_id: string;
@@ -448,6 +451,9 @@ async function handleIndividualAnalysis(requestBody: any) {
     competitor_keyword: competitorKeyword,
   } = requestBody;
 
+  const normalizedCompetitorKeyword =
+    typeof competitorKeyword === "string" ? competitorKeyword.trim().toLowerCase() : "";
+
   console.log("🔍 Análise individual iniciada - Modo dual: Performance + Market Trends");
 
   const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
@@ -497,15 +503,22 @@ async function handleIndividualAnalysis(requestBody: any) {
   // Carregar TODOS os competidores se keyword fornecido
   let allCompetitors: any[] = [];
 
-  if (competitorKeyword) {
-    console.log(`🔍 Carregando TODOS os competidores para keyword: "${competitorKeyword}"`);
+  if (normalizedCompetitorKeyword) {
+    console.log(
+      `🔍 Carregando TODOS os competidores para keyword normalizada: "${normalizedCompetitorKeyword}"`,
+    );
+
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - COMPETITOR_LOOKBACK_DAYS);
 
     const { data: competitorData, error: competitorError } = await supabase
       .from("competitor_ads_cache")
       .select("*")
-      .ilike("search_keyword", competitorKeyword)
+      .eq("search_keyword", normalizedCompetitorKeyword)
       .eq("is_active", true)
-      .order("scraped_at", { ascending: false });
+      .gte("scraped_at", ninetyDaysAgo.toISOString())
+      .order("scraped_at", { ascending: false })
+      .limit(MAX_COMPETITORS_FOR_ANALYSIS);
 
     if (competitorError) {
       console.error("❌ Erro ao carregar competidores:", competitorError);
@@ -526,14 +539,14 @@ async function handleIndividualAnalysis(requestBody: any) {
         });
       } else {
         console.warn("⚠️ NENHUM competidor encontrado. Possíveis causas:");
-        console.warn(`   - Keyword "${competitorKeyword}" não existe na tabela`);
+        console.warn(`   - Keyword "${normalizedCompetitorKeyword}" não existe na tabela`);
         console.warn(`   - Campo is_active = false para todos`);
         console.warn(`   - Tabela competitor_ads_cache está vazia`);
       }
     }
   }
   const competitorMediaMap = new Map<string, { images: string[]; videos: string[] }>();
-  const keywordForAssets = competitorKeyword || (allCompetitors[0]?.search_keyword ?? "");
+  const keywordForAssets = normalizedCompetitorKeyword || (allCompetitors[0]?.search_keyword ?? "");
   for (const competitor of allCompetitors) {
     const media = await resolveMediaForCompetitor(competitor, keywordForAssets);
     competitorMediaMap.set(getCompetitorId(competitor), media);
@@ -556,14 +569,15 @@ async function handleIndividualAnalysis(requestBody: any) {
 
   // ANÁLISE 2: Tendências de Mercado (SOMENTE se competidores >= 10)
   let marketTrendsAnalysis = null;
-  if (competitorKeyword && allCompetitors.length >= 10) {
+  if (normalizedCompetitorKeyword && allCompetitors.length >= 10) {
     console.log("📊 Gerando análise de tendências de mercado...");
     marketTrendsAnalysis = await generateMarketTrendsAnalysis({
-      competitorKeyword,
+      competitorKeyword: normalizedCompetitorKeyword,
       allCompetitors,
       GEMINI_API_KEY,
+      competitorMediaMap,
     });
-  } else if (competitorKeyword && allCompetitors.length < 10) {
+  } else if (normalizedCompetitorKeyword && allCompetitors.length < 10) {
     console.log(`⚠️ Apenas ${allCompetitors.length} competidores - mínimo de 10 necessário para análise de mercado`);
   }
 
@@ -708,6 +722,7 @@ async function generateMarketTrendsAnalysis(params: {
   competitorKeyword: string;
   allCompetitors: any[];
   GEMINI_API_KEY: string;
+  competitorMediaMap: Map<string, { images: string[]; videos: string[] }>;
 }): Promise<string> {
   const systemPrompt = `Você é um analista de tendências criativas. Analise os criativos do mercado fornecidos (TEXTO + IMAGENS + VÍDEOS) e estruture assim:
 
@@ -736,24 +751,33 @@ async function generateMarketTrendsAnalysis(params: {
 
   // Criar prompt estruturado com marcadores de posição para mídia
   const competitorDetailsWithMedia: string[] = [];
-  let imageIndex = 1;
-  let videoIndex = 1;
+  const mediaAttachmentQueue: Array<{ type: "image" | "video"; url: string; competitorName: string }> = [];
+  const seenAssetUrls = new Set<string>();
 
   for (let i = 0; i < params.allCompetitors.length; i++) {
     const ad = params.allCompetitors[i];
-    const media = competitorMediaMap.get(getCompetitorId(ad)) || { images: [], videos: [] };
+    const media = params.competitorMediaMap.get(getCompetitorId(ad)) || { images: [], videos: [] };
     let details = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Concorrente ${i + 1}: ${ad.page_name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    const imageUrls = media.images || [];
+    const videoUrls = media.videos || [];
 
-    if (imageIndex <= 30 && media.images.length > 0) {
-      details += `\n🖼️ [IMAGEM VISUAL #${imageIndex} ANEXADA ABAIXO]`;
-      imageIndex++;
+    for (const imageUrl of imageUrls) {
+      if (!imageUrl || seenAssetUrls.has(imageUrl) || mediaAttachmentQueue.length >= MAX_MARKET_MEDIA_ATTACHMENTS) {
+        continue;
+      }
+      seenAssetUrls.add(imageUrl);
+      mediaAttachmentQueue.push({ type: "image", url: imageUrl, competitorName: ad.page_name });
     }
-    if (videoIndex <= 5 && media.videos.length > 0) {
-      details += `\n🎥 [VÍDEO #${videoIndex} ANEXADO ABAIXO]`;
-      videoIndex++;
+
+    for (const videoUrl of videoUrls) {
+      if (!videoUrl || seenAssetUrls.has(videoUrl) || mediaAttachmentQueue.length >= MAX_MARKET_MEDIA_ATTACHMENTS) {
+        continue;
+      }
+      seenAssetUrls.add(videoUrl);
+      mediaAttachmentQueue.push({ type: "video", url: videoUrl, competitorName: ad.page_name });
     }
 
     details += `
@@ -766,7 +790,11 @@ Concorrente ${i + 1}: ${ad.page_name}
     competitorDetailsWithMedia.push(details);
   }
 
-  const userPrompt = `Analise ${params.allCompetitors.length} criativos do mercado para a keyword "${params.competitorKeyword}":
+  const mediaAssetsToUpload = mediaAttachmentQueue.slice(0, MAX_MARKET_MEDIA_ATTACHMENTS);
+
+  const userPrompt = `Analise ${params.allCompetitors.length} criativos do mercado para a keyword "${params.competitorKeyword}" (janela de ${COMPETITOR_LOOKBACK_DAYS} dias).
+
+${mediaAssetsToUpload.length} URLs reais (imagens e vídeos) foram anexadas abaixo para análise visual. Use TODAS as referências disponíveis (máximo ${MAX_MARKET_MEDIA_ATTACHMENTS}).
 
 **DADOS COMPLETOS DE ${params.allCompetitors.length} CONCORRENTES REAIS:**
 ${competitorDetailsWithMedia.join("\n")}
@@ -782,81 +810,61 @@ ${competitorDetailsWithMedia.join("\n")}
 
 **IMPORTANTE:** As imagens e vídeos estão anexados nesta mensagem. Analise TODOS os elementos visuais fornecidos.`;
 
-  // Upload de imagens dos competidores (limite 30)
   const contentParts: any[] = [{ text: userPrompt }];
-  let successfulUploads = 0;
+  let successfulImageUploads = 0;
+  let successfulVideoUploads = 0;
   let failedUploads = 0;
 
-  console.log(`📸 Iniciando upload de imagens de ${Math.min(30, params.allCompetitors.length)} competidores...`);
+  console.log(
+    `📸 Iniciando upload de até ${mediaAssetsToUpload.length} mídias (máximo ${MAX_MARKET_MEDIA_ATTACHMENTS})...`,
+  );
 
-  let uploadedImages = 0;
-  for (const competitor of params.allCompetitors) {
-    if (uploadedImages >= 30) break;
-    const media = competitorMediaMap.get(getCompetitorId(competitor)) || { images: [] as string[], videos: [] as string[] };
-    for (const imageUrl of media.images) {
-      if (uploadedImages >= 30) break;
-      if (imageUrl && !isVideoUrl(imageUrl)) {
-        try {
-          const { uri, mimeType } = await uploadImageToGemini(imageUrl, params.GEMINI_API_KEY);
-          contentParts.push({ fileData: { mimeType, fileUri: uri } });
-          uploadedImages++;
-          successfulUploads++;
-          console.log(
-            `✅ [${successfulUploads}/${Math.min(30, params.allCompetitors.length)}] Imagem do competidor "${competitor.page_name}" enviada: ${uri.substring(0, 60)}...`,
-          );
-        } catch (error) {
-          failedUploads++;
-          console.warn(
-            `❌ [${failedUploads} falhas] Erro ao processar imagem de "${competitor.page_name}":`,
-            error instanceof Error ? error.message : error,
-          );
-        }
+  for (const asset of mediaAssetsToUpload) {
+    if (!asset.url) continue;
+
+    if (asset.type === "image" && !isVideoUrl(asset.url)) {
+      try {
+        const { uri, mimeType } = await uploadImageToGemini(asset.url, params.GEMINI_API_KEY);
+        contentParts.push({ fileData: { mimeType, fileUri: uri } });
+        successfulImageUploads++;
+        console.log(
+          `✅ [IMG ${successfulImageUploads}] Imagem do competidor "${asset.competitorName}" enviada: ${uri.substring(0, 80)}...`,
+        );
+      } catch (error) {
+        failedUploads++;
+        console.warn(
+          `❌ [IMG] Falha ao processar ativo de "${asset.competitorName}":`,
+          error instanceof Error ? error.message : error,
+        );
       }
+    } else if (asset.type === "video") {
+      try {
+        const geminiVideoUri = await uploadVideoToGemini(asset.url, params.GEMINI_API_KEY);
+        contentParts.push({ fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri } });
+        successfulVideoUploads++;
+        console.log(
+          `✅ [VID ${successfulVideoUploads}] Vídeo do competidor "${asset.competitorName}" enviado: ${geminiVideoUri.substring(0, 80)}...`,
+        );
+      } catch (error) {
+        failedUploads++;
+        console.warn(
+          `❌ [VID] Erro ao processar vídeo de "${asset.competitorName}":`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    if (successfulImageUploads + successfulVideoUploads >= MAX_MARKET_MEDIA_ATTACHMENTS) {
+      console.log("🎯 Limite máximo de mídias atingido, interrompendo uploads adicionais");
+      break;
     }
   }
 
-  console.log(`📊 Resumo do upload de imagens:
-  ✅ Sucesso: ${successfulUploads}
+  console.log(`📊 Resumo dos uploads:
+  ✅ Imagens: ${successfulImageUploads}
+  ✅ Vídeos: ${successfulVideoUploads}
   ❌ Falhas: ${failedUploads}
-  📦 Total de competidores: ${params.allCompetitors.length}
-  🎯 Imagens enviadas para análise: ${successfulUploads}`);
-
-  // Upload de vídeos dos competidores (limite 5)
-  let successfulVideoUploads = 0;
-  let failedVideoUploads = 0;
-
-  console.log(`🎥 Iniciando upload de vídeos de competidores...`);
-
-  let uploadedVideos = 0;
-  for (const competitor of params.allCompetitors) {
-    if (uploadedVideos >= 5) break;
-    const media = competitorMediaMap.get(getCompetitorId(competitor)) || { images: [], videos: [] };
-    for (const videoUrl of media.videos) {
-      if (uploadedVideos >= 5) break;
-      if (videoUrl && videoUrl.trim() !== "") {
-        try {
-          const geminiVideoUri = await uploadVideoToGemini(videoUrl, params.GEMINI_API_KEY);
-          contentParts.push({ fileData: { mimeType: "video/mp4", fileUri: geminiVideoUri } });
-          uploadedVideos++;
-          successfulVideoUploads++;
-          console.log(
-            `✅ [${successfulVideoUploads}/5] Vídeo do competidor "${competitor.page_name}" enviado: ${geminiVideoUri.substring(0, 60)}...`,
-          );
-        } catch (error) {
-          failedVideoUploads++;
-          console.warn(
-            `❌ Erro ao processar vídeo de "${competitor.page_name}":`,
-            error instanceof Error ? error.message : error,
-          );
-        }
-      }
-    }
-  }
-
-  console.log(`📊 Resumo do upload de vídeos:
-  ✅ Sucesso: ${successfulVideoUploads}
-  ❌ Falhas: ${failedVideoUploads}
-  🎯 Vídeos enviados para análise: ${successfulVideoUploads}`);
+  🎯 Mídias solicitadas: ${mediaAssetsToUpload.length}`);
 
   const geminiResponse = await fetch(
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
@@ -883,7 +891,7 @@ ${competitorDetailsWithMedia.join("\n")}
   let analysisText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
   // Validar se análise menciona dados visuais
-  if (successfulUploads > 0) {
+  if (successfulImageUploads + successfulVideoUploads > 0) {
     const hasVisualAnalysis = /paleta|cor|tipografia|hierarquia visual|elemento visual/i.test(analysisText);
     if (!hasVisualAnalysis) {
       console.warn("⚠️ Análise não menciona elementos visuais apesar de imagens terem sido enviadas!");
@@ -914,6 +922,9 @@ async function handleGroupAnalysis(requestBody: any) {
     competitor_keyword: competitorKeyword,
   } = requestBody;
 
+  const normalizedCompetitorKeyword =
+    typeof competitorKeyword === "string" ? competitorKeyword.trim().toLowerCase() : "";
+
   console.log(`🔍 Análise de grupo iniciada: ${analysisType}`);
   console.log(`📊 ${creatives.length} criativos para análise`);
 
@@ -930,15 +941,20 @@ async function handleGroupAnalysis(requestBody: any) {
   // Para worst performers, carregar TODOS os competidores
   let allCompetitors: any[] = [];
 
-  if (analysisType === "worst" && competitorKeyword) {
+  if (analysisType === "worst" && normalizedCompetitorKeyword) {
     console.log(`🔍 Carregando competidores para análise de worst performers...`);
+
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - COMPETITOR_LOOKBACK_DAYS);
 
     const { data: competitorData, error: competitorError } = await supabase
       .from("competitor_ads_cache")
       .select("*")
-      .eq("search_keyword", competitorKeyword)
+      .eq("search_keyword", normalizedCompetitorKeyword)
       .eq("is_active", true)
-      .order("scraped_at", { ascending: false });
+      .gte("scraped_at", ninetyDaysAgo.toISOString())
+      .order("scraped_at", { ascending: false })
+      .limit(MAX_COMPETITORS_FOR_ANALYSIS);
 
     if (competitorError) {
       console.error("❌ Erro ao carregar competidores:", competitorError);

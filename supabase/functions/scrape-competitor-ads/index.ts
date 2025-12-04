@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CACHE_DURATION_DAYS = 90; // Cache válido por 7 dias
+const CACHE_DURATION_DAYS = 90; // Cache válido por 90 dias (API só usa dados dos últimos 90 dias)
 const MAX_IMAGES_PER_AD = 20;
 const MAX_VIDEOS_PER_AD = 5;
 
@@ -268,11 +268,14 @@ serve(async (req) => {
 
     const { keyword, niche, forceRefresh = false } = await req.json();
 
-    if (!keyword) {
+    const rawKeyword = typeof keyword === 'string' ? keyword : '';
+    const normalizedKeyword = rawKeyword.trim().toLowerCase();
+
+    if (!normalizedKeyword) {
       throw new Error('Keyword is required');
     }
 
-    console.log(`🔍 Buscando anúncios para: "${keyword}" (niche: ${niche || 'N/A'})`);
+    console.log(`🔍 Buscando anúncios para: "${rawKeyword}" (niche: ${niche || 'N/A'})`);
 
     // STEP 1: Verificar cache
     if (!forceRefresh) {
@@ -283,7 +286,7 @@ serve(async (req) => {
       const { data: cachedAds, count } = await supabaseAdmin
         .from('competitor_ads_cache')
         .select('*', { count: 'exact' })
-        .eq('search_keyword', keyword.toLowerCase())
+        .eq('search_keyword', normalizedKeyword)
         .gte('scraped_at', cacheExpiry.toISOString())
         .eq('is_active', true);
 
@@ -314,7 +317,7 @@ serve(async (req) => {
     const { data: searchHistory } = await supabaseAdmin
       .from('competitor_search_history')
       .insert({
-        search_keyword: keyword.toLowerCase(),
+        search_keyword: normalizedKeyword,
         search_niche: niche,
         company_id: null, // Cache global
         searched_by: profile.id,
@@ -324,7 +327,7 @@ serve(async (req) => {
       .single();
 
     // Converter keyword para URL da Facebook Ad Library
-    const facebookUrl = buildFacebookAdLibraryUrl(keyword);
+    const facebookUrl = buildFacebookAdLibraryUrl(rawKeyword.trim() || normalizedKeyword);
     console.log(`🔗 URL gerada: ${facebookUrl}`);
 
     // Configuração do Apify Actor (SEM webhook, usaremos polling)
@@ -336,7 +339,7 @@ serve(async (req) => {
           url: facebookUrl
         }
       ],
-      count: 300,
+      count: 100,
       "scrapePageAds.activeStatus": "all"
     };
 
@@ -435,8 +438,8 @@ serve(async (req) => {
               console.warn(`⚠️ ad_id não encontrado para ${pageName}, usando ID gerado: ${finalAdId}`);
             }
 
-            return {
-              search_keyword: keyword.toLowerCase(),
+        return {
+          search_keyword: normalizedKeyword,
               search_niche: niche,
               ad_id: finalAdId,  // Garantido não-NULL
               ad_name: ad.adName || ad.ad_creative_body || null,
@@ -457,7 +460,7 @@ serve(async (req) => {
             };
           });
 
-        // adsToInsert = await attachGcsAssetsToAds(adsToInsert, keyword.toLowerCase());
+        // adsToInsert = await attachGcsAssetsToAds(adsToInsert, normalizedKeyword);
 
         // Salvar no cache COM tratamento de erro
         if (adsToInsert.length > 0) {

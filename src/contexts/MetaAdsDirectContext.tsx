@@ -850,18 +850,20 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
   }, []);
 
   const fetchCompetitorAds = useCallback(async (keyword: string, forceRefresh = false) => {
-    if (!keyword || keyword.trim() === '') {
+    const normalizedKeyword = keyword?.trim().toLowerCase();
+
+    if (!normalizedKeyword) {
       setCompetitorAds(null);
       return;
     }
 
     setLoadingCompetitors(true);
     try {
-      console.log(`🔄 Buscando anúncios competitivos para: "${keyword}"`);
+      console.log(`🔄 Buscando anúncios competitivos para: "${keyword}" (normalizado: ${normalizedKeyword})`);
 
       const { data, error } = await supabase.functions.invoke('scrape-competitor-ads', {
         body: {
-          keyword: keyword.trim(),
+          keyword: normalizedKeyword,
           niche: null,
           forceRefresh
         }
