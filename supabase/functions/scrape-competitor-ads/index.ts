@@ -6,9 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const CACHE_DURATION_DAYS = 7; // Cache válido por 7 dias
-const MAX_IMAGES_PER_AD = 3;
-const MAX_VIDEOS_PER_AD = 1;
+const CACHE_DURATION_DAYS = 90; // Cache válido por 7 dias
+const MAX_IMAGES_PER_AD = 20;
+const MAX_VIDEOS_PER_AD = 5;
 
 function sanitizeKeyword(keyword: string) {
   return keyword.toLowerCase().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');

@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
       .select('id, keyword, company_id, last_updated')
       .lt('last_updated', sevenDaysAgo.toISOString())
       .order('last_updated', { ascending: true })
-      .limit(50); // Process max 50 keywords per run to avoid timeout
+      .limit(1500); // Process max 50 keywords per run to avoid timeout
 
     if (fetchError) {
       console.error('❌ Error fetching keywords:', fetchError);
