@@ -335,7 +335,7 @@ Deno.serve(async (req) => {
           url: facebookUrl
         }
       ],
-      count: 150,
+      count: 300,
       "scrapePageAds.activeStatus": "all"
     };
 
@@ -456,7 +456,7 @@ Deno.serve(async (req) => {
             };
           });
 
-        adsToInsert = await attachGcsAssetsToAds(adsToInsert, keyword.toLowerCase());
+        // adsToInsert = await attachGcsAssetsToAds(adsToInsert, keyword.toLowerCase());
 
         // Salvar no cache COM tratamento de erro
         if (adsToInsert.length > 0) {
