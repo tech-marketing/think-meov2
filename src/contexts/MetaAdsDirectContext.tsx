@@ -1003,6 +1003,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       }
     } catch (error) {
       console.error('❌ Error fetching competitor ads:', error);
+      console.log('🔍 Error details:', JSON.stringify(error, null, 2));
 
       let errorMessage = "Não foi possível carregar os anúncios de concorrentes. Tente novamente.";
 
