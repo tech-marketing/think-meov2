@@ -192,11 +192,8 @@ const Materials = () => {
         {/* Stats Cards Container */}
         <div className="flex gap-5 flex-wrap">
           <Card
-            className=""
+            className="bg-white border-[#EBEBEB] dark:bg-primary/15 dark:border-primary/35"
             style={{
-              backgroundColor: '#FFFFFF',
-              borderColor: '#EBEBEB',
-              borderWidth: '1px',
               borderRadius: '12px',
               boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04), inset 0px -1px 0px rgba(0, 0, 0, 0.02)',
               transition: 'none',
@@ -206,7 +203,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <Layers className="h-8 w-8 text-primary" />
@@ -219,11 +216,8 @@ const Materials = () => {
             </CardContent>
           </Card>
           <Card
-            className=""
+            className="bg-white border-[#EBEBEB] dark:bg-primary/15 dark:border-primary/35"
             style={{
-              backgroundColor: '#FFFFFF',
-              borderColor: '#EBEBEB',
-              borderWidth: '1px',
               borderRadius: '12px',
               boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04), inset 0px -1px 0px rgba(0, 0, 0, 0.02)',
               transition: 'none',
@@ -233,7 +227,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <ImageIcon className="h-8 w-8 text-primary" />
@@ -246,11 +240,8 @@ const Materials = () => {
             </CardContent>
           </Card>
           <Card
-            className=""
+            className="bg-white border-[#EBEBEB] dark:bg-primary/15 dark:border-primary/35"
             style={{
-              backgroundColor: '#FFFFFF',
-              borderColor: '#EBEBEB',
-              borderWidth: '1px',
               borderRadius: '12px',
               boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04), inset 0px -1px 0px rgba(0, 0, 0, 0.02)',
               transition: 'none',
@@ -260,7 +251,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <Play className="h-8 w-8 text-primary" />
@@ -273,11 +264,8 @@ const Materials = () => {
             </CardContent>
           </Card>
           <Card
-            className=""
+            className="bg-white border-[#EBEBEB] dark:bg-primary/15 dark:border-primary/35"
             style={{
-              backgroundColor: '#FFFFFF',
-              borderColor: '#EBEBEB',
-              borderWidth: '1px',
               borderRadius: '12px',
               boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.04), inset 0px -1px 0px rgba(0, 0, 0, 0.02)',
               transition: 'none',
@@ -287,7 +275,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <FileText className="h-8 w-8 text-primary" />
