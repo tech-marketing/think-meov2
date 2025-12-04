@@ -203,7 +203,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-[#7837C8]" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <Layers className="h-8 w-8 text-primary" />
@@ -227,7 +227,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-[#7837C8]" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <ImageIcon className="h-8 w-8 text-primary" />
@@ -251,7 +251,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-[#7837C8]" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <Play className="h-8 w-8 text-primary" />
@@ -275,7 +275,7 @@ const Materials = () => {
               flexGrow: 0
             }}
           >
-            <CardContent className="bg-primary/5 dark:bg-primary/20" style={{ padding: '28px 24px' }}>
+            <CardContent className="bg-primary/5 dark:bg-[#7837C8]" style={{ padding: '28px 24px' }}>
               <div className="flex items-center justify-between w-full">
                 <div className="p-2.5 rounded-xl">
                   <FileText className="h-8 w-8 text-primary" />
