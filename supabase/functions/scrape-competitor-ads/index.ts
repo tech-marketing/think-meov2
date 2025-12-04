@@ -340,11 +340,11 @@ serve(async (req) => {
       "scrapePageAds.activeStatus": "all"
     };
 
-    // Chamar Apify Actor com waitForFinish=120 (espera até 2 minutos)
-    console.log('🚀 Iniciando Apify Actor com waitForFinish=120...');
+    // Chamar Apify Actor com waitForFinish=0 (retorna imediatamente para polling)
+    console.log('🚀 Iniciando Apify Actor com waitForFinish=0...');
 
     let apifyResponse = await fetch(
-      `https://api.apify.com/v2/acts/curious_coder~facebook-ads-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=120`,
+      `https://api.apify.com/v2/acts/curious_coder~facebook-ads-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=0`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -357,7 +357,7 @@ serve(async (req) => {
       console.log('⚠️ Tentando actor alternativo (apify/facebook-ad-library-scraper)...');
 
       apifyResponse = await fetch(
-        `https://api.apify.com/v2/acts/apify~facebook-ad-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=120`,
+        `https://api.apify.com/v2/acts/apify~facebook-ad-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=0`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

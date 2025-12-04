@@ -25,7 +25,7 @@ serve(async (req) => {
     }
 
     const { runId, searchId } = await req.json();
-    
+
     if (!runId && !searchId) {
       throw new Error('runId ou searchId é obrigatório');
     }
@@ -45,9 +45,9 @@ serve(async (req) => {
         .select('metadata')
         .eq('id', searchId)
         .single();
-      
+
       actualRunId = history?.metadata?.runId;
-      
+
       if (!actualRunId) {
         throw new Error('runId não encontrado no histórico');
       }
@@ -55,7 +55,7 @@ serve(async (req) => {
 
     // Buscar status do run no Apify
     const APIFY_API_TOKEN = Deno.env.get('APIFY_API_TOKEN');
-    
+
     console.log(`📥 Buscando status do run ${actualRunId}...`);
     const runResponse = await fetch(
       `https://api.apify.com/v2/actor-runs/${actualRunId}?token=${APIFY_API_TOKEN}`
@@ -107,7 +107,7 @@ serve(async (req) => {
     // Se completou (SUCCEEDED)
     if (status === 'SUCCEEDED') {
       console.log('✅ Run completou! Buscando dataset...');
-      
+
       // Buscar dataset
       const datasetResponse = await fetch(
         `https://api.apify.com/v2/actor-runs/${actualRunId}/dataset/items?token=${APIFY_API_TOKEN}`
@@ -123,14 +123,14 @@ serve(async (req) => {
       // Buscar keyword do histórico
       let keyword = '';
       let niche = '';
-      
+
       if (searchId) {
         const { data: history } = await supabase
           .from('competitor_search_history')
           .select('search_keyword, search_niche')
           .eq('id', searchId)
           .single();
-        
+
         keyword = history?.search_keyword || '';
         niche = history?.search_niche || '';
       }
@@ -153,17 +153,17 @@ serve(async (req) => {
         .map((ad: any) => {
           // Tentar múltiplos campos para ad_id
           const adId = ad.adArchiveID || ad.ad_id || ad.id || ad.adID || ad.archiveID;
-          
+
           // Se ainda for NULL, gerar ID único baseado em campos disponíveis
           const pageName = ad.pageName || ad.page_name || 'unknown';
           const timestamp = Date.now();
           const randomId = Math.random().toString(36).substr(2, 9);
           const finalAdId = adId || `generated_${pageName}_${timestamp}_${randomId}`;
-          
+
           if (!adId) {
             console.warn(`⚠️ [Poll] ad_id não encontrado para ${pageName}, usando ID gerado: ${finalAdId}`);
           }
-          
+
           return {
             search_keyword: keyword.toLowerCase(),
             search_niche: niche,
@@ -234,12 +234,12 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Erro em poll-competitor-search:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    
+
     return new Response(JSON.stringify({
       success: false,
       error: errorMessage
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
