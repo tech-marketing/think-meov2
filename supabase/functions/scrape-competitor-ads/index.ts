@@ -329,7 +329,7 @@ serve(async (req) => {
 
     // Configuração do Apify Actor (SEM webhook, usaremos polling)
     console.log('🔄 Configurando Apify para modo síncrono com waitForFinish=120');
-    
+
     const actorInput = {
       urls: [
         {
@@ -342,7 +342,7 @@ serve(async (req) => {
 
     // Chamar Apify Actor com waitForFinish=120 (espera até 2 minutos)
     console.log('🚀 Iniciando Apify Actor com waitForFinish=120...');
-    
+
     let apifyResponse = await fetch(
       `https://api.apify.com/v2/acts/curious_coder~facebook-ads-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=120`,
       {
@@ -355,7 +355,7 @@ serve(async (req) => {
     // Fallback para actor alternativo se falhar com 403
     if (!apifyResponse.ok && apifyResponse.status === 403) {
       console.log('⚠️ Tentando actor alternativo (apify/facebook-ad-library-scraper)...');
-      
+
       apifyResponse = await fetch(
         `https://api.apify.com/v2/acts/apify~facebook-ad-library-scraper/runs?token=${APIFY_API_TOKEN}&waitForFinish=120`,
         {
@@ -373,14 +373,14 @@ serve(async (req) => {
         body: errorBody,
         actor: 'curious_coder/facebook-ads-library-scraper'
       });
-      
+
       throw new Error(`Apify API error: ${apifyResponse.status} - ${errorBody.slice(0, 200)}`);
     }
 
     const apifyRun = await apifyResponse.json();
     const runId = apifyRun.data.id;
     const runStatus = apifyRun.data.status;
-    
+
     console.log(`✅ Apify run: ${runId}, status: ${runStatus}`);
 
     // Atualizar histórico com runId
@@ -397,15 +397,15 @@ serve(async (req) => {
     // Se completou sincronamente (SUCCEEDED), buscar e retornar dados
     if (runStatus === 'SUCCEEDED') {
       console.log('⚡ Run completou sincronamente! Buscando dataset...');
-      
+
       const datasetResponse = await fetch(
         `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${APIFY_API_TOKEN}`
       );
-      
+
       if (datasetResponse.ok) {
         const ads = await datasetResponse.json();
         console.log(`✅ Dataset recebido: ${ads.length} anúncios`);
-        
+
         // Log da estrutura real dos dados do Apify (primeiro anúncio)
         if (ads.length > 0) {
           console.log('🔍 Estrutura do primeiro anúncio do Apify:', JSON.stringify(ads[0], null, 2));
@@ -424,17 +424,17 @@ serve(async (req) => {
           .map((ad: any) => {
             // Tentar múltiplos campos para ad_id
             const adId = ad.adArchiveID || ad.ad_id || ad.id || ad.adID || ad.archiveID;
-            
+
             // Se ainda for NULL, gerar ID único baseado em campos disponíveis
             const pageName = ad.pageName || ad.page_name || 'unknown';
             const timestamp = Date.now();
             const randomId = Math.random().toString(36).substr(2, 9);
             const finalAdId = adId || `generated_${pageName}_${timestamp}_${randomId}`;
-            
+
             if (!adId) {
               console.warn(`⚠️ ad_id não encontrado para ${pageName}, usando ID gerado: ${finalAdId}`);
             }
-            
+
             return {
               search_keyword: keyword.toLowerCase(),
               search_niche: niche,
@@ -456,13 +456,13 @@ serve(async (req) => {
               scraped_at: new Date().toISOString()
             };
           });
-        
+
         adsToInsert = await attachGcsAssetsToAds(adsToInsert, keyword.toLowerCase());
-        
+
         // Salvar no cache COM tratamento de erro
         if (adsToInsert.length > 0) {
           console.log(`💾 Salvando ${adsToInsert.length} anúncios no cache...`);
-          
+
           const { data: insertedAds, error: cacheError } = await supabaseAdmin
             .from('competitor_ads_cache')
             .upsert(adsToInsert, {
@@ -470,14 +470,14 @@ serve(async (req) => {
               ignoreDuplicates: false
             })
             .select();
-          
+
           if (cacheError) {
             console.error('❌ Erro ao salvar no cache:', cacheError);
           } else {
             console.log(`✅ ${insertedAds?.length || 0} anúncios salvos no cache com sucesso`);
           }
         }
-        
+
         // Marcar como completed
         await supabaseAdmin
           .from('competitor_search_history')
@@ -488,7 +488,7 @@ serve(async (req) => {
             cache_expires_at: new Date(Date.now() + CACHE_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString()
           })
           .eq('id', searchHistory.id);
-        
+
         // Retornar ads direto
         return new Response(JSON.stringify({
           success: true,
@@ -522,7 +522,7 @@ serve(async (req) => {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
