@@ -88,12 +88,14 @@ serve(async (req) => {
       ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
       : null;
 
-    await supabaseAdmin.from("figma_tokens").upsert({
-      user_id: stateProfileId,
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token || null,
-      expires_at: expiresAt,
-    });
+    await supabaseAdmin
+      .from("profiles")
+      .update({
+        figma_access_token: tokenData.access_token,
+        figma_refresh_token: tokenData.refresh_token || null,
+        figma_token_expires_at: expiresAt,
+      })
+      .eq("id", stateProfileId);
 
     const postMessageOrigin = stateOrigin || "*";
     const fallbackUrl = FIGMA_AUTH_SUCCESS_URL || "";

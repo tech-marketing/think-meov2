@@ -749,6 +749,9 @@ export type Database = {
           id: string
           invitation_sent_at: string | null
           invitation_status: string | null
+          figma_access_token: string | null
+          figma_refresh_token: string | null
+          figma_token_expires_at: string | null
           meta_access_token: string | null
           meta_token_expires_at: string | null
           meta_user_id: string | null
@@ -769,6 +772,9 @@ export type Database = {
           id?: string
           invitation_sent_at?: string | null
           invitation_status?: string | null
+          figma_access_token?: string | null
+          figma_refresh_token?: string | null
+          figma_token_expires_at?: string | null
           meta_access_token?: string | null
           meta_token_expires_at?: string | null
           meta_user_id?: string | null
@@ -789,6 +795,9 @@ export type Database = {
           id?: string
           invitation_sent_at?: string | null
           invitation_status?: string | null
+          figma_access_token?: string | null
+          figma_refresh_token?: string | null
+          figma_token_expires_at?: string | null
           meta_access_token?: string | null
           meta_token_expires_at?: string | null
           meta_user_id?: string | null

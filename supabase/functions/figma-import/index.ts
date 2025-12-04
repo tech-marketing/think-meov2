@@ -25,17 +25,29 @@ function getDefaultRedirectUri() {
   }
 }
 
+const APP_URL = Deno.env.get("APP_URL") || "https://statuesque-rugelach-635698.netlify.app";
+
+function getFrontendRedirectUri() {
+  if (!APP_URL) return null;
+  try {
+    const base = new URL(APP_URL);
+    return `${base.origin}/figma-oauth`;
+  } catch {
+    return null;
+  }
+}
+
 const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
 const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
-const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getDefaultRedirectUri();
-const actionsRequiringUser = new Set(["start-auth", "logout", "list-files", "list-frames", "import-frames"]);
+const FIGMA_REDIRECT_URI =
+  Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getFrontendRedirectUri() || getDefaultRedirectUri();
 
-interface FigmaTokenRow {
-  user_id: string;
-  access_token: string;
-  refresh_token?: string | null;
-  expires_at?: string | null;
+interface FigmaTokenInfo {
+  figma_access_token: string | null;
+  figma_refresh_token: string | null;
+  figma_token_expires_at: string | null;
 }
+const actionsRequiringUser = new Set(["start-auth", "logout", "list-files", "list-frames", "import-frames"]);
 
 function respond(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -59,22 +71,22 @@ async function fetchFromFigma(endpoint: string, accessToken: string) {
   return response.json();
 }
 
-function isTokenExpired(token?: FigmaTokenRow) {
-  if (!token?.expires_at) return false;
-  const expiresAt = new Date(token.expires_at).getTime();
+function isTokenExpired(token?: FigmaTokenInfo) {
+  if (!token?.figma_token_expires_at) return false;
+  const expiresAt = new Date(token.figma_token_expires_at).getTime();
   return Date.now() > expiresAt - 60_000;
 }
 
 async function saveToken(userId: string, accessToken: string, refreshToken?: string | null, expiresIn?: number) {
   const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null;
   await supabaseAdmin
-    .from("figma_tokens")
-    .upsert({
-      user_id: userId,
-      access_token: accessToken,
-      refresh_token: refreshToken || null,
-      expires_at: expiresAt,
-    });
+    .from("profiles")
+    .update({
+      figma_access_token: accessToken,
+      figma_refresh_token: refreshToken || null,
+      figma_token_expires_at: expiresAt,
+    })
+    .eq("id", userId);
 }
 
 async function refreshAccessToken(userId: string, refreshToken?: string | null) {
@@ -96,7 +108,14 @@ async function refreshAccessToken(userId: string, refreshToken?: string | null) 
 
   if (!response.ok) {
     console.error("Erro ao atualizar token do Figma:", await response.text());
-    await supabaseAdmin.from("figma_tokens").delete().eq("user_id", userId);
+    await supabaseAdmin
+      .from("profiles")
+      .update({
+        figma_access_token: null,
+        figma_refresh_token: null,
+        figma_token_expires_at: null,
+      })
+      .eq("id", userId);
     return null;
   }
 
@@ -106,19 +125,25 @@ async function refreshAccessToken(userId: string, refreshToken?: string | null) 
 }
 
 async function getValidToken(userId: string) {
-  const { data: tokenRow } = await supabaseAdmin
-    .from("figma_tokens")
-    .select("*")
-    .eq("user_id", userId)
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("figma_access_token, figma_refresh_token, figma_token_expires_at")
+    .eq("id", userId)
     .maybeSingle();
 
-  if (!tokenRow) return null;
+  if (!profile?.figma_access_token) return null;
 
-  if (isTokenExpired(tokenRow)) {
-    return await refreshAccessToken(userId, tokenRow.refresh_token || undefined);
+  const tokenInfo: FigmaTokenInfo = {
+    figma_access_token: profile.figma_access_token,
+    figma_refresh_token: profile.figma_refresh_token,
+    figma_token_expires_at: profile.figma_token_expires_at,
+  };
+
+  if (isTokenExpired(tokenInfo)) {
+    return await refreshAccessToken(userId, tokenInfo.figma_refresh_token || undefined);
   }
 
-  return tokenRow.access_token;
+  return tokenInfo.figma_access_token;
 }
 
 async function resolveProfileId(explicitUserId: string | undefined, authHeader: string | null) {
@@ -145,6 +170,50 @@ async function resolveProfileId(explicitUserId: string | undefined, authHeader: 
     console.error("Erro ao resolver usuário do Figma:", error);
     return null;
   }
+}
+
+function parseStatePayload(rawState: string | Record<string, unknown> | undefined) {
+  if (!rawState) return { profileId: null, origin: null };
+  if (typeof rawState === "object") {
+    return {
+      profileId: (rawState as any)?.profileId ?? null,
+      origin: (rawState as any)?.origin ?? null,
+    };
+  }
+
+  try {
+    const decoded = JSON.parse(decodeURIComponent(rawState));
+    return {
+      profileId: decoded?.profileId ?? null,
+      origin: decoded?.origin ?? null,
+    };
+  } catch {
+    return { profileId: rawState, origin: null };
+  }
+}
+
+async function exchangeCodeForTokens(code: string) {
+  if (!FIGMA_CLIENT_ID || !FIGMA_CLIENT_SECRET || !FIGMA_REDIRECT_URI) {
+    throw new Error("Configurações de OAuth do Figma ausentes");
+  }
+
+  const tokenResponse = await fetch("https://www.figma.com/api/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: FIGMA_CLIENT_ID,
+      client_secret: FIGMA_CLIENT_SECRET,
+      redirect_uri: FIGMA_REDIRECT_URI,
+      code,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    throw new Error(await tokenResponse.text());
+  }
+
+  return tokenResponse.json();
 }
 
 serve(async (req) => {
@@ -195,8 +264,30 @@ serve(async (req) => {
       return respond({ authUrl });
     }
 
+    if (action === "complete-auth") {
+      const { code, state } = body || {};
+      if (!code) {
+        throw new Error("Código de autorização não fornecido");
+      }
+
+      const statePayload = parseStatePayload(state);
+      const targetProfileId = statePayload.profileId || resolvedUserId || providedUserId;
+
+      if (!targetProfileId) {
+        throw new Error("Perfil não identificado para concluir o OAuth");
+      }
+
+      const tokenData = await exchangeCodeForTokens(code);
+      await saveToken(targetProfileId, tokenData.access_token, tokenData.refresh_token, tokenData.expires_in);
+
+      return respond({ success: true });
+    }
+
     if (action === "logout") {
-      await supabaseAdmin.from("figma_tokens").delete().eq("user_id", resolvedUserId!);
+      await supabaseAdmin
+        .from("profiles")
+        .update({ figma_access_token: null, figma_refresh_token: null, figma_token_expires_at: null })
+        .eq("id", resolvedUserId!);
       return respond({ success: true });
     }
 
