@@ -176,6 +176,7 @@ export default function Auth() {
           <TabsContent value="signin">
             <CardHeader className="space-y-1 pb-3 pt-1">
               <CardTitle className="text-xl font-brand text-center flex items-center justify-center gap-2">
+                <span>Isso é um teste!</span>
                 <span>Conecte-se ao</span>
                 <ThinkMeoLogo size="sm" />
               </CardTitle>
