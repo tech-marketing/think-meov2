@@ -28,7 +28,7 @@ function getDefaultRedirectUri() {
 const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
 const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
 const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getDefaultRedirectUri();
-const FIGMA_AUTH_SUCCESS_URL = Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://app.thinkmeo.com.br";
+const FIGMA_AUTH_SUCCESS_URL = Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://statuesque-rugelach-635698.netlify.app";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
