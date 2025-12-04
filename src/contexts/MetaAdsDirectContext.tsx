@@ -105,24 +105,24 @@ interface MetaAdsDirectContextType {
   accounts: MetaAccount[];
   campaigns: MetaCampaign[];
   adsData: AdsData | null;
-  
+
   // Meta Connection
   metaConnected: boolean;
   metaLoading: boolean;
   checkMetaConnection: () => Promise<void>;
-  
+
   // Competitor Analysis
   competitorKeyword: string;
   competitorAds: CompetitorAd[] | null;
   competitorSearchPhase: 'idle' | 'searching' | 'completed' | 'error';
-  
+
   // Loading states
   loadingAccounts: boolean;
   loadingCampaigns: boolean;
   loadingAds: boolean;
   loadingCompetitors: boolean;
   loadingStatus: LoadingStatus;
-  
+
   // Filters
   selectedAccount: string;
   selectedCampaigns: string[];
@@ -131,7 +131,7 @@ interface MetaAdsDirectContextType {
   platform: string;
   format: string;
   objective: string;
-  
+
   // Actions
   setSelectedAccount: (accountId: string) => void;
   setSelectedCampaigns: (campaignIds: string[]) => void;
@@ -141,12 +141,12 @@ interface MetaAdsDirectContextType {
   setFormat: (format: string) => void;
   setObjective: (objective: string) => void;
   setCompetitorKeyword: (keyword: string) => void;
-  
+
   fetchData: () => Promise<void>;
   loadAccounts: () => Promise<void>;
   loadCampaigns: (accountId: string) => Promise<void>;
   fetchCompetitorAds: (keyword: string, forceRefresh?: boolean) => Promise<void>;
-  
+
   // Utilities
   isValidDateRange: () => boolean;
   resetFilters: () => void;
@@ -174,16 +174,16 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
   const [campaigns, setCampaigns] = useState<MetaCampaign[]>([]);
   const [adsData, setAdsData] = useState<AdsData | null>(null);
   const [error, setError] = useState<string>('');
-  
+
   // Meta Connection state
   const [metaConnected, setMetaConnected] = useState(false);
   const [metaLoading, setMetaLoading] = useState(true);
-  
+
   // Competitor Analysis state
   const [competitorKeyword, setCompetitorKeyword] = useState('');
   const [competitorAds, setCompetitorAds] = useState<CompetitorAd[] | null>(null);
   const [competitorSearchPhase, setCompetitorSearchPhase] = useState<'idle' | 'searching' | 'completed' | 'error'>('idle');
-  
+
   // Loading states
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
@@ -195,21 +195,21 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     description: '',
     progress: 0
   });
-  
+
   // Filter state
   const [selectedAccount, setSelectedAccount] = useState('');
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const [platform, setPlatform] = useState('all');
   const [format, setFormat] = useState('all');
   const [objective, setObjective] = useState('all');
-  
+
   // Date state - default to last 30 days
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30);
     return date.toISOString().split('T')[0];
   });
-  
+
   const [endDate, setEndDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
   });
@@ -225,7 +225,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     try {
       setMetaLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         setMetaConnected(false);
         setMetaLoading(false);
@@ -238,11 +238,11 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
         .eq('user_id', user.id)
         .single();
 
-      const hasValidToken = profile?.meta_access_token && 
+      const hasValidToken = profile?.meta_access_token &&
         new Date(profile.meta_token_expires_at) > new Date();
 
       setMetaConnected(hasValidToken);
-      
+
       // Se conectado, carregar contas
       if (hasValidToken) {
         await loadAccounts();
@@ -269,10 +269,10 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     console.log('🔄 loadAccounts iniciando...');
     setLoadingAccounts(true);
     setError(''); // Clear any previous errors
-    
+
     try {
       console.log('🔄 Chamando edge function para carregar contas...');
-      
+
       const { data, error } = await supabase.functions.invoke('metrics-direct', {
         body: { action: 'accounts' }
       });
@@ -281,12 +281,12 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
 
       if (error) {
         console.error('❌ Erro na invocação da edge function:', error);
-        
+
         // Check for ad blocker related errors
         if (error.message && error.message.includes('Failed to send a request to the Edge Function')) {
           throw new Error('Erro de bloqueador de anúncios detectado. Tente desabilitar seu ad blocker ou usar modo incógnito.');
         }
-        
+
         throw new Error(`Edge Function Error: ${error.message}`);
       }
 
@@ -294,7 +294,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
         const accounts = data.data || [];
         console.log('✅ Contas recebidas:', accounts.length, accounts);
         setAccounts(accounts);
-        
+
         toast({
           title: "Contas carregadas",
           description: `${accounts.length} contas encontradas.`,
@@ -306,7 +306,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       }
     } catch (error) {
       console.error('❌ Erro completo em loadAccounts:', error);
-      
+
       toast({
         title: "Erro ao carregar contas",
         description: error.message || "Não foi possível carregar as contas do Meta.",
@@ -324,9 +324,9 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     setLoadingCampaigns(true);
     try {
       console.log(`🔄 Loading campaigns for account: ${accountId}`);
-      
+
       const { data, error } = await supabase.functions.invoke('metrics-direct', {
-        body: { 
+        body: {
           action: 'campaigns',
           accountId,
           startDate,
@@ -375,7 +375,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     }
 
     setLoadingAds(true);
-    
+
     // Phase 1: Fetching ads
     setLoadingStatus({
       phase: 'fetching-ads',
@@ -383,7 +383,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       description: 'Buscando anúncios ativos...',
       progress: 15
     });
-    
+
     try {
       console.log('🔄 Fetching ads data with filters:', {
         selectedAccount,
@@ -394,9 +394,9 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
         format,
         objective
       });
-      
+
       const { data, error } = await supabase.functions.invoke('metrics-direct', {
-        body: { 
+        body: {
           action: 'ads',
           accountId: selectedAccount,
           startDate,
@@ -421,7 +421,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       if (data.success) {
         // Handle both response formats: AdsData object or simple array
         let normalizedData: AdsData;
-        
+
         if (Array.isArray(data.data)) {
           // Edge function returned simple array - normalize to AdsData format
           const adsArray = data.data.map((ad: any) => ({
@@ -519,7 +519,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
         } else {
           // Already in AdsData format
           normalizedData = data.data;
-          
+
           // Phase 4: Enriching with taxonomy
           setLoadingStatus({
             phase: 'enriching-taxonomy',
@@ -527,11 +527,11 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
             description: 'Vinculando taxonomia e materiais...',
             progress: 75
           });
-          
+
           // Enrich ads with taxonomy information even when API returns AdsData
           await enrichAdsWithTaxonomy(normalizedData.ads, selectedAccount);
         }
-        
+
         // Phase 5: Finalizing
         setLoadingStatus({
           phase: 'finalizing',
@@ -539,12 +539,12 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
           description: 'Preparando dashboard...',
           progress: 95
         });
-        
+
         setAdsData(normalizedData);
         // Trigger materials refresh to update components that depend on local_material_id
         console.log('🔄 Triggering materials refresh after ads data update');
         console.log(`✅ Loaded ${normalizedData.ads.length} ads`);
-        
+
         // Complete
         setLoadingStatus({
           phase: 'complete',
@@ -552,7 +552,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
           description: `${normalizedData.ads.length} anúncios carregados com sucesso`,
           progress: 100
         });
-        
+
         toast({
           title: "Dados carregados com sucesso",
           description: `${normalizedData.ads.length} anúncios encontrados no período selecionado.`,
@@ -593,7 +593,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     const end = new Date(endDate);
     const today = new Date();
     today.setHours(23, 59, 59, 999); // End of today
-    
+
     return start <= end && end <= today;
   }, [startDate, endDate]);
 
@@ -602,7 +602,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     try {
       // Normalize the ad name for better matching
       const normalizedAdName = adName.toLowerCase().trim();
-      
+
       // Extract key parts from the ad name (remove copy suffixes, special chars)
       const cleanAdName = normalizedAdName
         .replace(/\s*—\s*cópia.*$/i, '') // Remove "— Cópia" and variants
@@ -612,7 +612,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
         .trim();
 
       // Extract meaningful parts (numbers, keywords)
-      const parts = cleanAdName.split(' ').filter(part => 
+      const parts = cleanAdName.split(' ').filter(part =>
         part.length > 2 && !['and', 'the', 'of', 'in', 'on', 'at', 'to', 'for'].includes(part)
       );
 
@@ -699,7 +699,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
   const enrichAdsWithTaxonomy = async (adsArray: MetaAd[], accountId: string) => {
     try {
       console.log('🔍 Iniciando enriquecimento de taxonomia para', adsArray.length, 'anúncios...');
-      
+
       // Get current user's company_id and profile_id
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -719,17 +719,17 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       }
 
       console.log('👤 Profile encontrado:', { role: profile.role, company_id: profile.company_id, profile_id: profile.id });
-      
+
       // For admin users, try to get company_id from account or project
       let operationCompanyId = profile.company_id;
       if (!operationCompanyId && profile.role === 'admin') {
         console.log('🔧 Admin sem company_id, tentando obter via get_company_id_for_operation...');
-        
+
         const { data: companyIdResult, error: companyIdError } = await supabase
-          .rpc('get_company_id_for_operation', { 
-            _account_id: accountId 
+          .rpc('get_company_id_for_operation', {
+            _account_id: accountId
           });
-        
+
         if (companyIdError) {
           console.error('❌ Erro ao obter company_id para admin:', companyIdError);
         } else {
@@ -761,10 +761,10 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       // Create a lookup map for existing taxonomies
       const existingTaxonomyMap = new Map(
         existingTaxonomies?.map(t => [
-          t.ad_id, 
-          { 
-            local_material_id: t.local_material_id, 
-            taxonomy_status: t.is_approved ? 'approved' : 'pending' 
+          t.ad_id,
+          {
+            local_material_id: t.local_material_id,
+            taxonomy_status: t.is_approved ? 'approved' : 'pending'
           }
         ]) || []
       );
@@ -773,11 +773,11 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
 
       // For each ad, try to find a matching material and create/update taxonomy entry
       console.log('🔄 Processando', adsArray.length, 'anúncios para enriquecimento...');
-      
+
       for (const ad of adsArray) {
         // Check if we already have a taxonomy for this ad
         const existingTaxonomy = existingTaxonomyMap.get(ad.ad_id);
-        
+
         if (existingTaxonomy) {
           // Use existing taxonomy
           ad.local_material_id = existingTaxonomy.local_material_id;
@@ -787,7 +787,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
           // Try to find a matching material by name
           console.log(`🔍 Buscando material correspondente para: "${ad.ad_name}"`);
           const matchingMaterial = await findMatchingMaterial(ad.ad_name);
-          
+
           if (matchingMaterial) {
             try {
               console.log(`📝 Criando nova entrada de taxonomia: ${ad.ad_name} -> ${matchingMaterial.name}`);
@@ -839,13 +839,13 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     setObjective('all');
     setCompetitorKeyword('');
     setCompetitorAds(null);
-    
+
     // Reset to last 30 days
     const date = new Date();
     setEndDate(date.toISOString().split('T')[0]);
     date.setDate(date.getDate() - 30);
     setStartDate(date.toISOString().split('T')[0]);
-    
+
     setAdsData(null);
   }, []);
 
@@ -894,13 +894,13 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
             title: "Análise competitiva carregada",
             description: `${ads.length} anúncios de concorrentes encontrados${data.source === 'cache' ? ' (cache)' : ''}.`,
           });
-        } 
+        }
         // Caso 2: Busca em andamento (primeira vez sem cache) - usar polling inteligente
         else if (data.status === 'processing') {
           console.log(`⏳ Busca iniciada (searchId: ${data.searchId}, runId: ${data.runId}). Iniciando polling inteligente...`);
-          
+
           setCompetitorSearchPhase('searching');
-          
+
           toast({
             title: "Buscando anúncios competitivos",
             description: data.message || "Analisando milhares de anúncios da concorrência...",
@@ -909,7 +909,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
           // Polling inteligente usando poll-competitor-search
           const maxAttempts = 24; // 24 * 5s = 2 minutos
           let attempts = 0;
-          
+
           const pollWithBackend = async () => {
             if (attempts >= maxAttempts) {
               console.error('⏱️ Timeout: polling excedeu 2 minutos');
@@ -922,23 +922,23 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
               setLoadingCompetitors(false);
               return;
             }
-            
+
             attempts++;
             console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de polling...`);
-            
+
             try {
               const { data: pollResult, error: pollError } = await supabase.functions.invoke('poll-competitor-search', {
-                body: { 
+                body: {
                   runId: data.runId,
                   searchId: data.searchId
                 }
               });
-              
+
               if (pollError) {
                 console.error('❌ Erro no polling:', pollError);
                 throw pollError;
               }
-              
+
               if (pollResult.status === 'completed') {
                 // Sucesso! Dados prontos
                 const ads = pollResult.ads.map((ad: any) => ({
@@ -955,36 +955,36 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
                   started_running_date: ad.started_running_date,
                   scraped_at: ad.scraped_at
                 }));
-                
+
                 setCompetitorAds(ads);
                 setCompetitorSearchPhase('completed');
                 setLoadingCompetitors(false);
-                
+
                 console.log(`✅ ${ads.length} anúncios competitivos carregados via polling`);
-                
+
                 toast({
                   title: "Análise competitiva concluída",
                   description: `${ads.length} anúncios de concorrentes encontrados.`,
                 });
-                
+
                 return;
               }
-              
+
               if (pollResult.status === 'failed') {
                 throw new Error(pollResult.error || 'Busca falhou no Apify');
               }
-              
+
               // Ainda processando, tentar novamente em 5 segundos
               if (pollResult.status === 'processing') {
                 console.log(`⏳ Ainda processando... tentativa ${attempts}/${maxAttempts}`);
                 setTimeout(pollWithBackend, 5000);
               }
-              
+
             } catch (error) {
               console.error('❌ Erro no polling:', error);
               setCompetitorSearchPhase('error');
               setLoadingCompetitors(false);
-              
+
               toast({
                 title: "Erro na busca competitiva",
                 description: error.message || "Não foi possível completar a busca.",
@@ -992,7 +992,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
               });
             }
           };
-          
+
           // Iniciar polling
           pollWithBackend();
         } else {
@@ -1003,9 +1003,23 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
       }
     } catch (error) {
       console.error('❌ Error fetching competitor ads:', error);
+
+      let errorMessage = "Não foi possível carregar os anúncios de concorrentes. Tente novamente.";
+
+      if (error instanceof Error) {
+        // Check for specific known errors
+        if (error.message.includes('APIFY_API_TOKEN not configured')) {
+          errorMessage = "Token do Apify não configurado. Por favor, configure a variável APIFY_API_TOKEN no Supabase.";
+        } else if (error.message.includes('Apify API error')) {
+          errorMessage = `Erro no serviço de busca (Apify): ${error.message}`;
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       toast({
         title: "Erro ao buscar anúncios competitivos",
-        description: "Não foi possível carregar os anúncios de concorrentes. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       });
       setCompetitorAds(null);
@@ -1022,24 +1036,24 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     accounts,
     campaigns,
     adsData,
-    
+
     // Meta Connection
     metaConnected,
     metaLoading,
     checkMetaConnection,
-    
+
     // Competitor Analysis
     competitorKeyword,
     competitorAds,
     competitorSearchPhase,
-    
+
     // Loading states
     loadingAccounts,
     loadingCampaigns,
     loadingAds,
     loadingCompetitors,
     loadingStatus,
-    
+
     // Filters
     selectedAccount,
     selectedCampaigns,
@@ -1048,7 +1062,7 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     platform,
     format,
     objective,
-    
+
     // Actions
     setSelectedAccount,
     setSelectedCampaigns,
@@ -1058,12 +1072,12 @@ export const MetaAdsDirectProvider: React.FC<MetaAdsDirectProviderProps> = ({ ch
     setFormat,
     setObjective,
     setCompetitorKeyword,
-    
+
     fetchData,
     loadAccounts,
     loadCampaigns,
     fetchCompetitorAds,
-    
+
     // Utilities
     isValidDateRange,
     resetFilters,
