@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +49,7 @@ export const FigmaImportModal = ({
   const [frames, setFrames] = useState<FigmaFrame[]>([]);
   const [selectedFile, setSelectedFile] = useState<FigmaFile | null>(null);
   const [selectedFrameIds, setSelectedFrameIds] = useState<string[]>([]);
+  const popupRef = useRef<Window | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -61,6 +62,14 @@ export const FigmaImportModal = ({
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'FIGMA_AUTH_SUCCESS') {
+        if (popupRef.current && !popupRef.current.closed) {
+          try {
+            popupRef.current.close();
+          } catch (closeError) {
+            console.warn('Não foi possível fechar a janela do Figma:', closeError);
+          }
+          popupRef.current = null;
+        }
         loadFiles();
       }
     };
@@ -69,6 +78,10 @@ export const FigmaImportModal = ({
   }, [userId]);
 
   const resetState = () => {
+    if (popupRef.current && !popupRef.current.closed) {
+      popupRef.current.close();
+      popupRef.current = null;
+    }
     setLoadingFiles(false);
     setLoadingFrames(false);
     setImporting(false);
@@ -97,7 +110,10 @@ export const FigmaImportModal = ({
       if (error) throw error;
 
       if (data?.authUrl) {
-        window.open(data.authUrl, "_blank", "width=480,height=720");
+        popupRef.current = window.open(data.authUrl, "figmaAuth", "width=480,height=720");
+        if (!popupRef.current) {
+          throw new Error('Não foi possível abrir a janela de autenticação');
+        }
       } else {
         throw new Error('URL de autenticação não encontrada.');
       }
