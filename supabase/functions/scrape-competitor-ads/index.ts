@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
 
 const corsHeaders = {
@@ -231,7 +230,7 @@ function buildFacebookAdLibraryUrl(keyword: string, country = 'BR'): string {
   return `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=${country}&q=${encodedKeyword}&search_type=keyword_unordered&media_type=all`;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -328,7 +327,7 @@ serve(async (req) => {
     console.log(`🔗 URL gerada: ${facebookUrl}`);
 
     // Configuração do Apify Actor (SEM webhook, usaremos polling)
-    console.log('🔄 Configurando Apify para modo síncrono com waitForFinish=120');
+    console.log('🔄 Configurando Apify para modo síncrono com waitForFinish=0');
 
     const actorInput = {
       urls: [
