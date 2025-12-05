@@ -183,6 +183,15 @@ async function getCachedFile(
     return null;
   }
 
+  const framesCache = Array.isArray(data.frames_cache) ? data.frames_cache : [];
+  if (!framesCache.length) {
+    return null;
+  }
+  const hasThumbnails = framesCache.some((frame: any) => Boolean(frame?.thumbnailUrl));
+  if (!hasThumbnails) {
+    return null;
+  }
+
   return {
     file: {
       key: fileKey,

@@ -215,9 +215,9 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         setLoadingProgress((prev) => (prev >= 95 ? 95 : prev + 5));
       }, 400);
 
-      setTimeout(() => setLoadingMessage("Buscando seus frames... 30%"), 300);
-      setTimeout(() => setLoadingMessage("Buscando seus frames... 60%"), 800);
-      setTimeout(() => setLoadingMessage("Buscando seus frames... 90%"), 1500);
+      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 300);
+      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 800);
+      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 1500);
 
       const { data, error } = await supabase.functions.invoke('figma-api', {
         body: { action: 'get-file-from-url', figmaUrl: urlToLoad.trim() }
@@ -237,7 +237,7 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
 
       clearInterval(interval);
       setLoadingProgress(100);
-      setLoadingMessage("Buscando seus frames... 100%");
+      setLoadingMessage("Buscando seus frames...");
 
       if (data?.file) {
         setLoadedFile(data.file);
