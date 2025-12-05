@@ -1,5 +1,4 @@
--- Create companies table
-CREATE TABLE public.companies (
+CREATE TABLE IF NOT EXISTS public.companies (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -7,10 +6,17 @@ CREATE TABLE public.companies (
 );
 
 -- Create user roles enum
-CREATE TYPE public.user_role AS ENUM ('admin', 'client', 'collaborator');
+DO $$
+BEGIN
+  CREATE TYPE public.user_role AS ENUM ('admin', 'client', 'collaborator');
+EXCEPTION
+  WHEN duplicate_object THEN
+    NULL;
+END;
+$$;
 
 -- Create profiles table
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
   email TEXT NOT NULL,
@@ -23,7 +29,7 @@ CREATE TABLE public.profiles (
 );
 
 -- Create projects table
-CREATE TABLE public.projects (
+CREATE TABLE IF NOT EXISTS public.projects (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -36,7 +42,7 @@ CREATE TABLE public.projects (
 );
 
 -- Create materials table
-CREATE TABLE public.materials (
+CREATE TABLE IF NOT EXISTS public.materials (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('image', 'video', 'pdf')),
@@ -54,7 +60,7 @@ CREATE TABLE public.materials (
 );
 
 -- Create comments table
-CREATE TABLE public.comments (
+CREATE TABLE IF NOT EXISTS public.comments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   material_id UUID NOT NULL REFERENCES public.materials(id) ON DELETE CASCADE,
   author_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -62,12 +68,16 @@ CREATE TABLE public.comments (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
 
+-- Ensure company names remain unique even on existing databases
+CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_unique ON public.companies(name);
+
 -- Insert companies
 INSERT INTO public.companies (name) VALUES
 ('Mandic'),
 ('Hyster'),
 ('Yale'),
-('Água Doce');
+('Água Doce')
+ON CONFLICT (name) DO NOTHING;
 
 -- Enable Row Level Security
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
@@ -76,10 +86,9 @@ ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.materials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
--- Create security definer functions
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
-RETURNS user_role AS $$
-  SELECT role FROM public.profiles WHERE user_id = auth.uid();
+RETURNS text AS $$
+  SELECT role::text FROM public.profiles WHERE user_id = auth.uid();
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 CREATE OR REPLACE FUNCTION public.get_current_user_company()
@@ -93,26 +102,33 @@ RETURNS UUID[] AS $$
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- RLS Policies for companies
+DROP POLICY IF EXISTS "Everyone can view companies" ON public.companies;
 CREATE POLICY "Everyone can view companies" ON public.companies
 FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Only admins can modify companies" ON public.companies;
 CREATE POLICY "Only admins can modify companies" ON public.companies
 FOR ALL USING (public.get_current_user_role() = 'admin');
 
 -- RLS Policies for profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile" ON public.profiles
 FOR SELECT USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
 CREATE POLICY "Admins can view all profiles" ON public.profiles
 FOR SELECT USING (public.get_current_user_role() = 'admin');
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" ON public.profiles
 FOR UPDATE USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Admins can manage all profiles" ON public.profiles;
 CREATE POLICY "Admins can manage all profiles" ON public.profiles
 FOR ALL USING (public.get_current_user_role() = 'admin');
 
 -- RLS Policies for projects
+DROP POLICY IF EXISTS "Users can view projects from their company" ON public.projects;
 CREATE POLICY "Users can view projects from their company" ON public.projects
 FOR SELECT USING (
   public.get_current_user_role() = 'admin' OR
@@ -120,6 +136,7 @@ FOR SELECT USING (
   company_id = ANY(public.get_current_user_allowed_companies())
 );
 
+DROP POLICY IF EXISTS "Admins and collaborators can create projects" ON public.projects;
 CREATE POLICY "Admins and collaborators can create projects" ON public.projects
 FOR INSERT WITH CHECK (
   public.get_current_user_role() IN ('admin', 'collaborator') AND
@@ -128,6 +145,7 @@ FOR INSERT WITH CHECK (
    company_id = ANY(public.get_current_user_allowed_companies()))
 );
 
+DROP POLICY IF EXISTS "Admins and project creators can update projects" ON public.projects;
 CREATE POLICY "Admins and project creators can update projects" ON public.projects
 FOR UPDATE USING (
   public.get_current_user_role() = 'admin' OR
@@ -135,6 +153,7 @@ FOR UPDATE USING (
 );
 
 -- RLS Policies for materials
+DROP POLICY IF EXISTS "Users can view materials from accessible companies" ON public.materials;
 CREATE POLICY "Users can view materials from accessible companies" ON public.materials
 FOR SELECT USING (
   public.get_current_user_role() = 'admin' OR
@@ -142,6 +161,7 @@ FOR SELECT USING (
   company_id = ANY(public.get_current_user_allowed_companies())
 );
 
+DROP POLICY IF EXISTS "Admins and collaborators can create materials" ON public.materials;
 CREATE POLICY "Admins and collaborators can create materials" ON public.materials
 FOR INSERT WITH CHECK (
   public.get_current_user_role() IN ('admin', 'collaborator') AND
@@ -150,6 +170,7 @@ FOR INSERT WITH CHECK (
    company_id = ANY(public.get_current_user_allowed_companies()))
 );
 
+DROP POLICY IF EXISTS "Users can update materials they created or review" ON public.materials;
 CREATE POLICY "Users can update materials they created or review" ON public.materials
 FOR UPDATE USING (
   public.get_current_user_role() = 'admin' OR
@@ -160,6 +181,7 @@ FOR UPDATE USING (
 );
 
 -- RLS Policies for comments
+DROP POLICY IF EXISTS "Users can view comments on accessible materials" ON public.comments;
 CREATE POLICY "Users can view comments on accessible materials" ON public.comments
 FOR SELECT USING (
   EXISTS (
@@ -172,6 +194,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can create comments on accessible materials" ON public.comments;
 CREATE POLICY "Users can create comments on accessible materials" ON public.comments
 FOR INSERT WITH CHECK (
   EXISTS (
@@ -193,9 +216,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_companies_updated_at ON public.companies;
 CREATE TRIGGER update_companies_updated_at BEFORE UPDATE ON public.companies FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_projects_updated_at ON public.projects;
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON public.projects FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_materials_updated_at ON public.materials;
 CREATE TRIGGER update_materials_updated_at BEFORE UPDATE ON public.materials FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Create function to handle new user signup
@@ -214,6 +241,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create trigger for new user signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();

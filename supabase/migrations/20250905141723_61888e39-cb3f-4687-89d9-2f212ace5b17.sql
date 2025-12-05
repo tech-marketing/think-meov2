@@ -1,6 +1,5 @@
--- Configuração completa do projeto Supabase
 -- 1. Criar tabela de empresas
-CREATE TABLE public.companies (
+CREATE TABLE IF NOT EXISTS public.companies (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -8,7 +7,7 @@ CREATE TABLE public.companies (
 );
 
 -- 2. Criar tabela de emails autorizados
-CREATE TABLE public.authorized_emails (
+CREATE TABLE IF NOT EXISTS public.authorized_emails (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   role TEXT NOT NULL CHECK (role IN ('admin', 'client', 'collaborator')),
@@ -20,7 +19,7 @@ CREATE TABLE public.authorized_emails (
 );
 
 -- 3. Criar tabela de perfis de usuários
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
@@ -38,7 +37,7 @@ CREATE TABLE public.profiles (
 );
 
 -- 4. Criar tabela de projetos
-CREATE TABLE public.projects (
+CREATE TABLE IF NOT EXISTS public.projects (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT,
@@ -51,7 +50,7 @@ CREATE TABLE public.projects (
 );
 
 -- 5. Criar tabela de participantes do projeto
-CREATE TABLE public.project_participants (
+CREATE TABLE IF NOT EXISTS public.project_participants (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
@@ -63,7 +62,7 @@ CREATE TABLE public.project_participants (
 );
 
 -- 6. Criar tabela de materiais
-CREATE TABLE public.materials (
+CREATE TABLE IF NOT EXISTS public.materials (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('image', 'video', 'pdf', 'copy')),
@@ -82,7 +81,7 @@ CREATE TABLE public.materials (
 );
 
 -- 7. Criar tabela de comentários
-CREATE TABLE public.comments (
+CREATE TABLE IF NOT EXISTS public.comments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   content TEXT NOT NULL,
   material_id UUID NOT NULL REFERENCES public.materials(id) ON DELETE CASCADE,
@@ -92,7 +91,7 @@ CREATE TABLE public.comments (
 );
 
 -- 8. Criar tabela de notificações
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('mention', 'comment', 'approval', 'rejection', 'project_update')),
@@ -117,6 +116,7 @@ ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para companies
+DROP POLICY IF EXISTS "Users can view their company" ON public.companies;
 CREATE POLICY "Users can view their company" ON public.companies 
 FOR SELECT USING (
   EXISTS (
@@ -126,6 +126,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Admins can manage companies" ON public.companies;
 CREATE POLICY "Admins can manage companies" ON public.companies 
 FOR ALL USING (
   EXISTS (
@@ -136,6 +137,7 @@ FOR ALL USING (
 );
 
 -- Políticas RLS para authorized_emails  
+DROP POLICY IF EXISTS "Admins can manage authorized emails" ON public.authorized_emails;
 CREATE POLICY "Admins can manage authorized emails" ON public.authorized_emails 
 FOR ALL USING (
   EXISTS (
@@ -146,6 +148,7 @@ FOR ALL USING (
 );
 
 -- Políticas RLS para profiles
+DROP POLICY IF EXISTS "Users can view profiles from their company" ON public.profiles;
 CREATE POLICY "Users can view profiles from their company" ON public.profiles 
 FOR SELECT USING (
   auth.uid() = user_id OR
@@ -156,13 +159,16 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" ON public.profiles 
 FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "System can insert profiles" ON public.profiles;
 CREATE POLICY "System can insert profiles" ON public.profiles 
 FOR INSERT WITH CHECK (true);
 
 -- Políticas RLS para projects
+DROP POLICY IF EXISTS "Users can view projects from their company" ON public.projects;
 CREATE POLICY "Users can view projects from their company" ON public.projects 
 FOR SELECT USING (
   EXISTS (
@@ -172,6 +178,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can create projects" ON public.projects;
 CREATE POLICY "Users can create projects" ON public.projects 
 FOR INSERT WITH CHECK (
   EXISTS (
@@ -181,6 +188,7 @@ FOR INSERT WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Users can update projects from their company" ON public.projects;
 CREATE POLICY "Users can update projects from their company" ON public.projects 
 FOR UPDATE USING (
   EXISTS (
@@ -190,12 +198,14 @@ FOR UPDATE USING (
   )
 );
 
+DROP POLICY IF EXISTS "Project creators can delete projects" ON public.projects;
 CREATE POLICY "Project creators can delete projects" ON public.projects 
 FOR DELETE USING (
   created_by = (SELECT id FROM public.profiles WHERE user_id = auth.uid())
 );
 
 -- Políticas RLS para project_participants
+DROP POLICY IF EXISTS "Users can view project participants" ON public.project_participants;
 CREATE POLICY "Users can view project participants" ON public.project_participants 
 FOR SELECT USING (
   EXISTS (
@@ -206,6 +216,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can manage project participants" ON public.project_participants;
 CREATE POLICY "Users can manage project participants" ON public.project_participants 
 FOR ALL USING (
   EXISTS (
@@ -217,6 +228,7 @@ FOR ALL USING (
 );
 
 -- Políticas RLS para materials
+DROP POLICY IF EXISTS "Users can view materials from their company" ON public.materials;
 CREATE POLICY "Users can view materials from their company" ON public.materials 
 FOR SELECT USING (
   EXISTS (
@@ -226,6 +238,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can create materials" ON public.materials;
 CREATE POLICY "Users can create materials" ON public.materials 
 FOR INSERT WITH CHECK (
   EXISTS (
@@ -235,6 +248,7 @@ FOR INSERT WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Users can update materials from their company" ON public.materials;
 CREATE POLICY "Users can update materials from their company" ON public.materials 
 FOR UPDATE USING (
   EXISTS (
@@ -244,12 +258,14 @@ FOR UPDATE USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can delete materials they created" ON public.materials;
 CREATE POLICY "Users can delete materials they created" ON public.materials 
 FOR DELETE USING (
   created_by = (SELECT id FROM public.profiles WHERE user_id = auth.uid())
 );
 
 -- Políticas RLS para comments
+DROP POLICY IF EXISTS "Users can view comments from their company materials" ON public.comments;
 CREATE POLICY "Users can view comments from their company materials" ON public.comments 
 FOR SELECT USING (
   EXISTS (
@@ -260,6 +276,7 @@ FOR SELECT USING (
   )
 );
 
+DROP POLICY IF EXISTS "Users can create comments" ON public.comments;
 CREATE POLICY "Users can create comments" ON public.comments 
 FOR INSERT WITH CHECK (
   EXISTS (
@@ -271,34 +288,37 @@ FOR INSERT WITH CHECK (
 );
 
 -- Políticas RLS para notifications
+DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 CREATE POLICY "Users can view their own notifications" ON public.notifications 
 FOR SELECT USING (
   user_id = (SELECT id FROM public.profiles WHERE user_id = auth.uid())
 );
 
+DROP POLICY IF EXISTS "System can create notifications" ON public.notifications;
 CREATE POLICY "System can create notifications" ON public.notifications 
 FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
 CREATE POLICY "Users can update their own notifications" ON public.notifications 
 FOR UPDATE USING (
   user_id = (SELECT id FROM public.profiles WHERE user_id = auth.uid())
 );
 
 -- Criar índices para melhor performance
-CREATE INDEX idx_profiles_user_id ON public.profiles(user_id);
-CREATE INDEX idx_profiles_company_id ON public.profiles(company_id);
-CREATE INDEX idx_projects_company_id ON public.projects(company_id);
-CREATE INDEX idx_projects_created_by ON public.projects(created_by);
-CREATE INDEX idx_project_participants_project_id ON public.project_participants(project_id);
-CREATE INDEX idx_project_participants_user_id ON public.project_participants(user_id);
-CREATE INDEX idx_materials_project_id ON public.materials(project_id);
-CREATE INDEX idx_materials_created_by ON public.materials(created_by);
-CREATE INDEX idx_materials_company_id ON public.materials(company_id);
-CREATE INDEX idx_materials_status ON public.materials(status);
-CREATE INDEX idx_comments_material_id ON public.comments(material_id);
-CREATE INDEX idx_comments_author_id ON public.comments(author_id);
-CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
-CREATE INDEX idx_notifications_read ON public.notifications(read);
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_company_id ON public.profiles(company_id);
+CREATE INDEX IF NOT EXISTS idx_projects_company_id ON public.projects(company_id);
+CREATE INDEX IF NOT EXISTS idx_projects_created_by ON public.projects(created_by);
+CREATE INDEX IF NOT EXISTS idx_project_participants_project_id ON public.project_participants(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_participants_user_id ON public.project_participants(user_id);
+CREATE INDEX IF NOT EXISTS idx_materials_project_id ON public.materials(project_id);
+CREATE INDEX IF NOT EXISTS idx_materials_created_by ON public.materials(created_by);
+CREATE INDEX IF NOT EXISTS idx_materials_company_id ON public.materials(company_id);
+CREATE INDEX IF NOT EXISTS idx_materials_status ON public.materials(status);
+CREATE INDEX IF NOT EXISTS idx_comments_material_id ON public.comments(material_id);
+CREATE INDEX IF NOT EXISTS idx_comments_author_id ON public.comments(author_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
 
 -- Função para atualizar timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -309,32 +329,37 @@ RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SET search_path = public;
 
--- Triggers para atualizar timestamps automaticamente
+DROP TRIGGER IF EXISTS update_companies_updated_at ON public.companies;
 CREATE TRIGGER update_companies_updated_at
 BEFORE UPDATE ON public.companies
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_projects_updated_at ON public.projects;
 CREATE TRIGGER update_projects_updated_at
 BEFORE UPDATE ON public.projects
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_project_participants_updated_at ON public.project_participants;
 CREATE TRIGGER update_project_participants_updated_at
 BEFORE UPDATE ON public.project_participants
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_materials_updated_at ON public.materials;
 CREATE TRIGGER update_materials_updated_at
 BEFORE UPDATE ON public.materials
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_notifications_updated_at ON public.notifications;
 CREATE TRIGGER update_notifications_updated_at
 BEFORE UPDATE ON public.notifications
 FOR EACH ROW
@@ -400,6 +425,7 @@ END;
 $$;
 
 -- Trigger para criar perfil automaticamente
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW
@@ -407,4 +433,5 @@ EXECUTE FUNCTION public.handle_new_user();
 
 -- Inserir email autorizado
 INSERT INTO public.authorized_emails (email, role, created_at) 
-VALUES ('joao.vyctor@thinkcompany.com.br', 'admin', now());
+VALUES ('joao.vyctor@thinkcompany.com.br', 'admin', now())
+ON CONFLICT (email) DO NOTHING;
