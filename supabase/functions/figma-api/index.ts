@@ -273,7 +273,7 @@ serve(async (req) => {
 
         // Fetch thumbnails for frames (max 50 to avoid API limits)
         if (frames.length > 0) {
-          const framesToFetch = frames.slice(0, 50);
+          const framesToFetch = frames.slice(0, 10000000000000000);
           const nodeIds = framesToFetch.map((f: any) => f.id).join(',');
           
           try {
