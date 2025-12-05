@@ -7,6 +7,8 @@ const corsHeaders = {
 };
 
 const supabaseUrl = 'https://oprscgxsfldzydbrbioz.supabase.co';
+const HISTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_FRAMES = 50;
 
 // Helper to refresh Figma token if expired
 async function refreshFigmaToken(supabaseAdmin: any, userId: string, refreshToken: string): Promise<string | null> {
@@ -155,6 +157,83 @@ function extractFrames(document: any): any[] {
   return frames;
 }
 
+async function getCachedFile(
+  supabaseAdmin: any,
+  userId: string,
+  fileKey: string,
+) {
+  const { data, error } = await supabaseAdmin
+    .from('figma_file_history')
+    .select('file_name,file_url,thumbnail_url,frames_cache,cached_at')
+    .eq('user_id', userId)
+    .eq('file_key', fileKey)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching cached file:', error);
+    return null;
+  }
+
+  if (!data?.frames_cache || !data.cached_at) {
+    return null;
+  }
+
+  const cachedAt = new Date(data.cached_at).getTime();
+  if (Date.now() - cachedAt > HISTORY_CACHE_TTL_MS) {
+    return null;
+  }
+
+  return {
+    file: {
+      key: fileKey,
+      name: data.file_name,
+      thumbnailUrl: data.thumbnail_url,
+      url: data.file_url,
+    },
+    frames: data.frames_cache,
+  };
+}
+
+async function upsertHistory(
+  supabaseAdmin: any,
+  params: {
+    userId: string;
+    fileKey: string;
+    fileName: string;
+    fileUrl: string;
+    thumbnailUrl?: string | null;
+    frames?: any[];
+  },
+) {
+  try {
+    const payload: Record<string, unknown> = {
+      user_id: params.userId,
+      file_key: params.fileKey,
+      file_name: params.fileName,
+      file_url: params.fileUrl,
+      thumbnail_url: params.thumbnailUrl || null,
+      last_used_at: new Date().toISOString(),
+    };
+
+    if (params.frames) {
+      payload.frames_cache = params.frames;
+      payload.cached_at = new Date().toISOString();
+    }
+
+    const { error } = await supabaseAdmin
+      .from('figma_file_history')
+      .upsert(payload, {
+        onConflict: 'user_id,file_key',
+      });
+
+    if (error) {
+      console.error('Error saving to file history:', error);
+    }
+  } catch (error) {
+    console.error('Error in file history upsert:', error);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -178,7 +257,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, fileKey, nodeIds } = body;
+    const { action, fileKey, nodeIds, frames: framesPayload } = body;
 
     console.log('Figma API action:', action, 'user:', user.id);
 
@@ -210,10 +289,10 @@ serve(async (req) => {
     if (action === 'get-file-history') {
       const { data: history, error: historyError } = await supabaseAdmin
         .from('figma_file_history')
-        .select('*')
+        .select('id,file_key,file_name,file_url,thumbnail_url,last_used_at')
         .eq('user_id', user.id)
         .order('last_used_at', { ascending: false })
-        .limit(10);
+        .limit(20);
 
       if (historyError) {
         console.error('Error fetching file history:', historyError);
@@ -224,7 +303,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, history: history || [] }),
+        JSON.stringify({ success: true, files: history || [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -267,13 +346,38 @@ serve(async (req) => {
         const extractedFileKey = match[2];
         console.log('Extracted file key from URL:', extractedFileKey);
 
+        const cached = await getCachedFile(supabaseAdmin, user.id, extractedFileKey);
+        if (cached) {
+          await upsertHistory(supabaseAdmin, {
+            userId: user.id,
+            fileKey: extractedFileKey,
+            fileName: cached.file.name,
+            fileUrl: cached.file.url,
+            thumbnailUrl: cached.file.thumbnailUrl,
+          });
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              file: {
+                key: extractedFileKey,
+                name: cached.file.name,
+                thumbnailUrl: cached.file.thumbnailUrl,
+              },
+              frames: cached.frames,
+              cached: true,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+
         // Get file info
         const fileData = await figmaRequest(figmaToken, `/files/${extractedFileKey}?depth=2`);
-        const frames = extractFrames(fileData.document);
+        const frames = extractFrames(fileData.document).slice(0, MAX_FRAMES);
 
         // Fetch thumbnails for frames (max 50 to avoid API limits)
         if (frames.length > 0) {
-          const framesToFetch = frames.slice(0, 10000000000000000);
+          const framesToFetch = frames.slice(0, MAX_FRAMES);
           const nodeIds = framesToFetch.map((f: any) => f.id).join(',');
           
           try {
@@ -296,28 +400,14 @@ serve(async (req) => {
         }
 
         // Save to file history (UPSERT)
-        try {
-          const { error: upsertError } = await supabaseAdmin
-            .from('figma_file_history')
-            .upsert({
-              user_id: user.id,
-              file_key: extractedFileKey,
-              file_name: fileData.name,
-              file_url: figmaUrl,
-              thumbnail_url: fileData.thumbnailUrl || null,
-              last_used_at: new Date().toISOString(),
-            }, {
-              onConflict: 'user_id,file_key',
-            });
-
-          if (upsertError) {
-            console.error('Error saving to file history:', upsertError);
-          } else {
-            console.log('File saved to history:', fileData.name);
-          }
-        } catch (historyErr) {
-          console.error('Error in file history upsert:', historyErr);
-        }
+        await upsertHistory(supabaseAdmin, {
+          userId: user.id,
+          fileKey: extractedFileKey,
+          fileName: fileData.name,
+          fileUrl: figmaUrl,
+          thumbnailUrl: fileData.thumbnailUrl || null,
+          frames,
+        });
 
         return new Response(
           JSON.stringify({ 
@@ -354,12 +444,28 @@ serve(async (req) => {
       }
 
       case 'export-frames': {
-        if (!fileKey || !nodeIds || nodeIds.length === 0) {
-          throw new Error('fileKey and nodeIds are required');
+        const idsSource: string[] =
+          Array.isArray(nodeIds) && nodeIds.length > 0
+            ? nodeIds
+            : Array.isArray(framesPayload)
+              ? framesPayload.map((frame: any) => frame.id)
+              : [];
+
+        if (!fileKey || idsSource.length === 0) {
+          throw new Error('fileKey and frames are required');
+        }
+
+        const nameById = new Map<string, string>();
+        if (Array.isArray(framesPayload)) {
+          framesPayload.forEach((frame: any) => {
+            if (frame?.id) {
+              nameById.set(frame.id, frame.name || frame.id);
+            }
+          });
         }
 
         // Export frames as PNG
-        const ids = nodeIds.join(',');
+        const ids = idsSource.join(',');
         const exportData = await figmaRequest(
           figmaToken, 
           `/images/${fileKey}?ids=${encodeURIComponent(ids)}&format=png&scale=2`
@@ -437,7 +543,7 @@ serve(async (req) => {
             );
 
             const publicUrl = `https://storage.googleapis.com/${GCS_BUCKET}/${fileName}`;
-            results.push({ nodeId, url: publicUrl, name: safeNodeId });
+            results.push({ nodeId, url: publicUrl, name: nameById.get(nodeId) || safeNodeId });
             
             console.log('Uploaded frame:', nodeId, '→', publicUrl);
           } catch (err) {
