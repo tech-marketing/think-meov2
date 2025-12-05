@@ -148,7 +148,23 @@ async function getValidToken(userId: string) {
 
 async function resolveProfileId(explicitUserId: string | undefined, authHeader: string | null) {
   if (explicitUserId) {
-    return explicitUserId;
+    const { data: profileById } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id", explicitUserId)
+      .maybeSingle();
+    if (profileById?.id) {
+      return profileById.id;
+    }
+
+    const { data: profileByUser } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("user_id", explicitUserId)
+      .maybeSingle();
+    if (profileByUser?.id) {
+      return profileByUser.id;
+    }
   }
 
   if (!authHeader) return null;
