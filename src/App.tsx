@@ -22,7 +22,6 @@ import CreativeDetail from "./pages/CreativeDetail";
 import BriefingEditor from "./pages/BriefingEditor";
 import TaxonomyAssistant from "./pages/TaxonomyAssistant";
 import DocumentEditor from "./pages/DocumentEditor";
-import FigmaOAuth from "./pages/FigmaOAuth";
 import ProtectedRoute from "./components/ProtectedRoute";
 import RoleProtectedRoute from "./components/RoleProtectedRoute";
 import { ScrollToTop } from "./components/ScrollToTop";
@@ -37,7 +36,6 @@ const AppContent = () => {
       <ScrollToTop />
       <Routes>
         <Route path="/auth" element={<Auth />} />
-        <Route path="/figma-oauth" element={<FigmaOAuth />} />
         <Route path="/" element={<ProtectedRoute><AppLayout><Index /></AppLayout></ProtectedRoute>} />
         <Route path="/materials" element={<ProtectedRoute><AppLayout><Materials /></AppLayout></ProtectedRoute>} />
         <Route path="/my-uploads" element={<RoleProtectedRoute allowedRoles={['admin', 'collaborator']}><AppLayout><MyUploads /></AppLayout></RoleProtectedRoute>} />

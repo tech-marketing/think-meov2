@@ -55,15 +55,21 @@ serve(async (req) => {
 
     if (errorParam) {
       console.error("Erro retornado pelo Figma:", errorParam);
-      return htmlResponse("Ocorreu um erro ao conectar com o Figma. Você já pode fechar esta janela.");
+      return htmlResponse("Ocorreu um erro ao conectar com o Figma. Você já pode fechar esta janela.", {
+        queryParam: "figma_error",
+        value: "oauth_error",
+      });
     }
 
     if (!code || !stateProfileId) {
-      return htmlResponse("Requisição inválida.");
+      return htmlResponse("Requisição inválida.", { queryParam: "figma_error", value: "invalid_request" });
     }
 
     if (!FIGMA_CLIENT_ID || !FIGMA_CLIENT_SECRET || !FIGMA_REDIRECT_URI) {
-      return htmlResponse("Configurações de OAuth não encontradas.");
+      return htmlResponse("Configurações de OAuth não encontradas.", {
+        queryParam: "figma_error",
+        value: "missing_config",
+      });
     }
 
     const tokenResponse = await fetch("https://www.figma.com/api/oauth/token", {
@@ -80,7 +86,10 @@ serve(async (req) => {
 
     if (!tokenResponse.ok) {
       console.error("Falha ao trocar código por token:", await tokenResponse.text());
-      return htmlResponse("Erro ao finalizar autenticação com o Figma.");
+      return htmlResponse("Erro ao finalizar autenticação com o Figma.", {
+        queryParam: "figma_error",
+        value: "token_exchange",
+      });
     }
 
     const tokenData = await tokenResponse.json();
@@ -99,12 +108,14 @@ serve(async (req) => {
 
     const postMessageOrigin = stateOrigin || "*";
     const fallbackUrl = FIGMA_AUTH_SUCCESS_URL || "";
+    const successUrl = buildRedirectUrl("figma_connected", "true", fallbackUrl);
 
     const redirectHtml = `
       <html>
         <body style="font-family: sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh;">
           <p>Autenticação concluída! Você já pode fechar esta janela.</p>
           <script>
+            const redirectUrl = ${JSON.stringify(successUrl)};
             if (window.opener) {
               try {
                 window.opener.postMessage({ type: 'FIGMA_AUTH_SUCCESS' }, ${JSON.stringify(postMessageOrigin)});
@@ -115,10 +126,7 @@ serve(async (req) => {
             setTimeout(() => {
               window.close();
               setTimeout(() => {
-                var redirectUrl = ${JSON.stringify(fallbackUrl)};
-                if (!window.closed && redirectUrl) {
-                  window.location.href = redirectUrl;
-                }
+                window.location.href = redirectUrl;
               }, 600);
             }, 600);
           </script>
@@ -134,13 +142,33 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Erro na função figma-oauth-callback:", error);
-    return htmlResponse("Ocorreu um erro ao processar sua autenticação.");
+    return htmlResponse("Ocorreu um erro ao processar sua autenticação.", {
+      queryParam: "figma_error",
+      value: "unexpected",
+    });
   }
 });
 
-function htmlResponse(message: string) {
+function buildRedirectUrl(param: string, value: string, fallback?: string | null) {
+  const base = fallback || Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://statuesque-rugelach-635698.netlify.app";
+  try {
+    const url = new URL(base);
+    url.searchParams.set(param, value);
+    return url.toString();
+  } catch {
+    return `${base}?${encodeURIComponent(param)}=${encodeURIComponent(value)}`;
+  }
+}
+
+function htmlResponse(message: string, options?: { queryParam?: string; value?: string }) {
+  const redirectUrl = options?.queryParam
+    ? buildRedirectUrl(options.queryParam, options.value || "true", FIGMA_AUTH_SUCCESS_URL)
+    : null;
   return new Response(
-    `<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;">${message}</body></html>`,
+    `<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+      ${message}
+      ${redirectUrl ? `<script>setTimeout(() => { window.location.href = ${JSON.stringify(redirectUrl)}; }, 1200);</script>` : ""}
+    </body></html>`,
     { headers: { "Content-Type": "text/html", ...corsHeaders } },
   );
 }

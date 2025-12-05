@@ -34,7 +34,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { FigmaImportModal } from "@/components/FigmaImportModal";
+import { FigmaFrameSelector, ImportedFrame } from "@/components/FigmaFrameSelector";
 import { Figma } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -90,8 +90,8 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [companySearch, setCompanySearch] = useState("");
   const [projectSearch, setProjectSearch] = useState("");
-  const [showFigmaModal, setShowFigmaModal] = useState(false);
-  const [importedAssets, setImportedAssets] = useState<Array<{ name: string; url: string; type: 'image' | 'video' | 'pdf' }>>([]);
+  const [figmaModalOpen, setFigmaModalOpen] = useState(false);
+  const [figmaFrames, setFigmaFrames] = useState<ImportedFrame[]>([]);
   const { profile } = useAuth();
   const { toast } = useToast();
 
@@ -232,7 +232,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
             type="button"
             variant="outline"
             className="flex-1 justify-center gap-2 border-dashed"
-            onClick={() => setShowFigmaModal(true)}
+            onClick={() => setFigmaModalOpen(true)}
             disabled={userRole === 'viewer'}
           >
             <Figma className="h-4 w-4" />
@@ -275,26 +275,25 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           </div>
         )}
 
-        {importedAssets.length > 0 && (
+        {figmaFrames.length > 0 && (
           <div className="space-y-2">
-            <Label>Frames importados do Figma ({importedAssets.length})</Label>
+            <Label>Frames importados do Figma ({figmaFrames.length})</Label>
             <div className="max-h-40 overflow-y-auto space-y-2">
-              {importedAssets.map((asset, index) => (
+              {figmaFrames.map((asset, index) => (
                 <div
-                  key={`${asset.url}-${index}`}
-                  className="flex items-center justify-between p-3 bg-accent/40 rounded-lg"
+                  key={`${asset.nodeId}-${index}`}
+                  className="flex items-center justify-between p-3 bg-accent/40 rounded-lg gap-3"
                 >
-                  <div className="flex flex-col">
+                  <img src={asset.url} alt={asset.name} className="h-12 w-12 rounded object-cover" />
+                  <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-sm font-medium">{asset.name}</span>
-                    <span className="text-xs text-muted-foreground break-all">
-                      {asset.url.split('/').pop() || asset.url}
-                    </span>
+                    <span className="text-xs text-muted-foreground break-all">{asset.url}</span>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleRemoveImportedAsset(index)}
+                    onClick={() => handleRemoveFigmaFrame(index)}
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -572,22 +571,22 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
     setFiles(prev => [...prev, ...validFiles]);
   };
 
-  const removeFile = (index: number) => {
-      const fileToRemove = files[index];
-      setFiles(prev => prev.filter((_, i) => i !== index));
-
-      if (fileToRemove && importedAssets.length > 0) {
-        const matchingAssetIndex = importedAssets.findIndex(asset =>
-          asset.name === fileToRemove.name || asset.url.includes(fileToRemove.name)
-        );
-        if (matchingAssetIndex !== -1) {
-          handleRemoveImportedAsset(matchingAssetIndex);
-        }
-      }
+  const handleFigmaImport = (frames: ImportedFrame[]) => {
+    setFigmaFrames((prev) => [...prev, ...frames]);
+    if (frames.length) {
+      toast({
+        title: "Frames adicionados",
+        description: `${frames.length} frame(s) do Figma foram importados.`,
+      });
+    }
   };
 
-  const handleRemoveImportedAsset = (index: number) => {
-    setImportedAssets(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveFigmaFrame = (index: number) => {
+    setFigmaFrames(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -622,7 +621,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       sourceLabel.trim() ||
       cardText.trim();
 
-    if (!hasWireframeData && files.length === 0 && importedAssets.length === 0) {
+    if (!hasWireframeData && files.length === 0 && figmaFrames.length === 0) {
       toast({
         title: "Erro",
         description: "Preencha pelo menos um campo do wireframe ou adicione arquivos",
@@ -652,7 +651,7 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
       if (projectError) throw projectError;
 
       // Se há dados de wireframe (sem arquivos), criar material wireframe
-      if (hasWireframeData && files.length === 0 && importedAssets.length === 0) {
+      if (hasWireframeData && files.length === 0 && figmaFrames.length === 0) {
         // Gerar wireframe baseado no tipo de layout selecionado
         let wireframeData: any = null;
         let canvasData: string | null = null;
@@ -702,7 +701,12 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           description: "Wireframe enviado para aprovação!"
         });
       } else {
-        const fileUrls: { url: string; name: string; type: 'image' | 'video' | 'pdf' }[] = [...importedAssets];
+        const fileUrls: { url: string; name: string; type: 'image' | 'video' | 'pdf' }[] =
+          figmaFrames.map((frame) => ({
+            url: frame.url,
+            name: frame.name,
+            type: "image",
+          }));
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -1042,11 +1046,10 @@ export const UploadModal = ({ open, onOpenChange, onMaterialUploaded }: UploadMo
           </form>
         </div>
       </DialogContent>
-      <FigmaImportModal
-        open={showFigmaModal}
-        onOpenChange={(openState) => setShowFigmaModal(openState)}
-        onImported={(assets) => setImportedAssets(prev => [...prev, ...(assets || [])])}
-        userId={profile?.id}
+      <FigmaFrameSelector
+        open={figmaModalOpen}
+        onOpenChange={setFigmaModalOpen}
+        onFramesImported={handleFigmaImport}
       />
     </Dialog>
   );
