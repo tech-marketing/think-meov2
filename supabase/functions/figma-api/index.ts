@@ -1,489 +1,537 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { persistSession: false },
-});
+const supabaseUrl = 'https://oprscgxsfldzydbrbioz.supabase.co';
 
-const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
-const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
-const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI");
+// Helper to refresh Figma token if expired
+async function refreshFigmaToken(supabaseAdmin: any, userId: string, refreshToken: string): Promise<string | null> {
+  const FIGMA_CLIENT_ID = Deno.env.get('FIGMA_OAUTH_CLIENT_ID');
+  const FIGMA_CLIENT_SECRET = Deno.env.get('FIGMA_OAUTH_CLIENT_SECRET');
 
-const GCS_BUCKET_NAME = Deno.env.get("GCS_BUCKET_NAME");
-const GCS_SERVICE_ACCOUNT_KEY = Deno.env.get("GCS_SERVICE_ACCOUNT_KEY");
-
-type ProfileRecord = {
-  id: string;
-  user_id: string;
-  figma_access_token: string | null;
-  figma_refresh_token: string | null;
-  figma_token_expires_at: string | null;
-};
-
-type FrameSelection = { id: string; name: string };
-
-const actionsRequiringProfile = new Set([
-  "get-user",
-  "disconnect",
-  "get-file-history",
-  "get-file-from-url",
-  "export-frames",
-]);
-
-function respond(body: Record<string, unknown>, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
-  });
-}
-
-function isTokenExpired(record: ProfileRecord) {
-  if (!record?.figma_token_expires_at) return false;
-  const expires = new Date(record.figma_token_expires_at).getTime();
-  return Date.now() > expires - 60_000;
-}
-
-async function fetchProfileRecord(profileId: string): Promise<ProfileRecord | null> {
-  const { data, error } = await supabaseAdmin
-    .from("profiles")
-    .select("id,user_id,figma_access_token,figma_refresh_token,figma_token_expires_at")
-    .eq("id", profileId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Erro ao buscar perfil:", error);
-    throw new Error("Não foi possível localizar o perfil");
-  }
-
-  return data as ProfileRecord | null;
-}
-
-async function refreshAccessToken(profile: ProfileRecord): Promise<string | null> {
-  if (!profile.figma_refresh_token) return null;
-  if (!FIGMA_CLIENT_ID || !FIGMA_CLIENT_SECRET || !FIGMA_REDIRECT_URI) {
-    throw new Error("Configurações de OAuth do Figma ausentes");
-  }
-
-  const response = await fetch("https://www.figma.com/api/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: FIGMA_CLIENT_ID,
-      client_secret: FIGMA_CLIENT_SECRET,
-      grant_type: "refresh_token",
-      refresh_token: profile.figma_refresh_token,
-      redirect_uri: FIGMA_REDIRECT_URI,
-    }),
-  });
-
-  if (!response.ok) {
-    console.error("Erro ao atualizar token do Figma:", await response.text());
-    await supabaseAdmin
-      .from("profiles")
-      .update({
-        figma_access_token: null,
-        figma_refresh_token: null,
-        figma_token_expires_at: null,
-      })
-      .eq("id", profile.id);
+  if (!FIGMA_CLIENT_ID || !FIGMA_CLIENT_SECRET) {
+    console.error('Missing Figma credentials for token refresh');
     return null;
   }
 
-  const data = await response.json();
-  const expiresAt = data.expires_in
-    ? new Date(Date.now() + data.expires_in * 1000).toISOString()
-    : null;
+  try {
+    console.log('Refreshing Figma token for user:', userId);
+    
+    const response = await fetch('https://api.figma.com/v1/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: FIGMA_CLIENT_ID,
+        client_secret: FIGMA_CLIENT_SECRET,
+        refresh_token: refreshToken.trim(),
+        grant_type: 'refresh_token',
+      }),
+    });
 
-  await supabaseAdmin
-    .from("profiles")
-    .update({
-      figma_access_token: data.access_token,
-      figma_refresh_token: data.refresh_token || profile.figma_refresh_token,
-      figma_token_expires_at: expiresAt,
-    })
-    .eq("id", profile.id);
+    const data = await response.json();
 
-  return data.access_token as string;
+    if (!response.ok || !data.access_token) {
+      console.error('Token refresh failed:', data);
+      return null;
+    }
+
+    const expiresAt = new Date(Date.now() + (data.expires_in || 7200) * 1000);
+
+    // Update tokens in database
+    await supabaseAdmin
+      .from('profiles')
+      .update({
+        figma_access_token: data.access_token,
+        figma_refresh_token: data.refresh_token || refreshToken,
+        figma_token_expires_at: expiresAt.toISOString(),
+      })
+      .eq('user_id', userId);
+
+    console.log('Token refreshed successfully');
+    return data.access_token;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    return null;
+  }
 }
 
-async function getValidAccessToken(profileId: string) {
-  const profile = await fetchProfileRecord(profileId);
-  if (!profile?.figma_access_token) {
-    return { accessToken: null, profile };
+// Get valid Figma token (refresh if needed)
+async function getValidFigmaToken(supabaseAdmin: any, userId: string): Promise<{ token: string | null; error?: string }> {
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select('figma_access_token, figma_refresh_token, figma_token_expires_at')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !profile) {
+    return { token: null, error: 'Profile not found' };
   }
 
-  if (isTokenExpired(profile)) {
-    const refreshed = await refreshAccessToken(profile);
-    return { accessToken: refreshed, profile: refreshed ? await fetchProfileRecord(profileId) : profile };
+  if (!profile.figma_access_token) {
+    return { token: null, error: 'Figma not connected' };
   }
 
-  return { accessToken: profile.figma_access_token, profile };
+  // Check if token expiration is unknown (requires reconnection)
+  if (!profile.figma_token_expires_at) {
+    console.log('Token expiration unknown, user needs to reconnect');
+    return { token: null, error: 'Token inválido - reconecte sua conta do Figma' };
+  }
+
+  // Check if token is expired
+  const expiresAt = new Date(profile.figma_token_expires_at);
+  const now = new Date();
+  const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+
+  if (expiresAt.getTime() - bufferTime < now.getTime()) {
+    console.log('Token expired or expiring soon, refreshing...');
+    if (profile.figma_refresh_token) {
+      const newToken = await refreshFigmaToken(supabaseAdmin, userId, profile.figma_refresh_token);
+      if (newToken) {
+        return { token: newToken };
+      }
+    }
+    return { token: null, error: 'Token expired and refresh failed' };
+  }
+
+  return { token: profile.figma_access_token };
 }
 
-async function fetchFromFigma(endpoint: string, token: string) {
-  const response = await fetch(`https://api.figma.com/v1/${endpoint}`, {
-    headers: { Authorization: `Bearer ${token}` },
+// Make Figma API request
+async function figmaRequest(token: string, endpoint: string): Promise<any> {
+  const response = await fetch(`https://api.figma.com/v1${endpoint}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Erro ao se comunicar com a API do Figma");
+    const errorText = await response.text();
+    
+    // Check for scope/permission errors (403)
+    if (response.status === 403 && (errorText.includes('scope') || errorText.includes('permission'))) {
+      const scopeError = new Error('SCOPE_INSUFFICIENT');
+      (scopeError as any).requiresReconnect = true;
+      throw scopeError;
+    }
+    
+    throw new Error(`Figma API error: ${response.status} - ${errorText}`);
   }
 
   return response.json();
 }
 
-async function resolveProfileId(explicitUserId: string | undefined, authHeader: string | null) {
-  if (explicitUserId) {
-    const { data: profileById } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .eq("id", explicitUserId)
-      .maybeSingle();
-    if (profileById?.id) {
-      return profileById.id;
+// Extract frames from Figma document
+function extractFrames(document: any): any[] {
+  const frames: any[] = [];
+  
+  function traverse(node: any, pageName: string) {
+    if (node.type === 'FRAME' || node.type === 'COMPONENT') {
+      frames.push({
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        pageName,
+        width: node.absoluteBoundingBox?.width,
+        height: node.absoluteBoundingBox?.height,
+      });
     }
-
-    const { data: profileByUser } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .eq("user_id", explicitUserId)
-      .maybeSingle();
-    if (profileByUser?.id) {
-      return profileByUser.id;
-    }
-  }
-
-  if (!authHeader) return null;
-  const token = authHeader.replace("Bearer", "").trim();
-  if (!token) return null;
-
-  const {
-    data: { user },
-  } = await supabaseAdmin.auth.getUser(token);
-  if (!user?.id) return null;
-
-  const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return profile?.id ?? null;
-}
-
-function parseFileKeyFromUrl(url: string) {
-  const match = url.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)[\/?]/i);
-  if (match?.[1]) return match[1];
-  return null;
-}
-
-function extractFrames(document: any) {
-  const frames: Array<{ id: string; name: string; pageName: string }> = [];
-  if (!document?.children) return frames;
-
-  for (const page of document.children) {
-    if (!page?.children) continue;
-    for (const child of page.children) {
-      if (child?.type === "FRAME") {
-        frames.push({
-          id: child.id,
-          name: child.name,
-          pageName: page.name,
-        });
-      }
+    
+    // Only traverse direct children of pages (not nested frames)
+    if (node.type === 'CANVAS' && node.children) {
+      node.children.forEach((child: any) => traverse(child, node.name));
     }
   }
 
-  return frames.slice(0, 50);
-}
-
-async function upsertHistory(userId: string, fileKey: string, fileName: string, fileUrl: string, thumbnail?: string | null) {
-  await supabaseAdmin.from("figma_file_history").upsert({
-    user_id: userId,
-    file_key: fileKey,
-    file_name: fileName,
-    file_url: fileUrl,
-    thumbnail_url: thumbnail || null,
-    last_used_at: new Date().toISOString(),
-  }, { onConflict: "user_id,file_key" });
-}
-
-function normalizeFileUrl(rawUrl: string, fileKey: string) {
-  try {
-    const parsed = new URL(rawUrl);
-    return `${parsed.origin}/file/${fileKey}`;
-  } catch {
-    return `https://www.figma.com/file/${fileKey}`;
-  }
-}
-
-function pemToBinary(pem: string): ArrayBuffer {
-  const base64 = pem
-    .replace(/-----BEGIN PRIVATE KEY-----/, "")
-    .replace(/-----END PRIVATE KEY-----/, "")
-    .replace(/\s/g, "");
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-async function signJWT(serviceAccount: any): Promise<string> {
-  const header = { alg: "RS256", typ: "JWT" };
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/devstorage.full_control",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600,
-    iat: now,
-  };
-
-  const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-  const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-  const privateKeyBinary = pemToBinary(serviceAccount.private_key);
-  const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
-    privateKeyBinary,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const signature = await crypto.subtle.sign(
-    "RSASSA-PKCS1-v1_5",
-    cryptoKey,
-    new TextEncoder().encode(unsignedToken),
-  );
-
-  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-
-  return `${unsignedToken}.${encodedSignature}`;
-}
-
-async function getGcsAccessToken() {
-  if (!GCS_SERVICE_ACCOUNT_KEY) {
-    throw new Error("Credenciais do GCS não configuradas");
+  if (document.children) {
+    document.children.forEach((page: any) => traverse(page, page.name));
   }
 
-  const serviceAccount = JSON.parse(GCS_SERVICE_ACCOUNT_KEY);
-  const jwt = await signJWT(serviceAccount);
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Falha ao gerar access token do GCS: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return data.access_token as string;
-}
-
-async function uploadToGCS(
-  bucketName: string,
-  path: string,
-  fileData: Uint8Array,
-  contentType: string,
-  accessToken: string,
-) {
-  const url = `https://storage.googleapis.com/upload/storage/v1/b/${bucketName}/o?uploadType=media&name=${encodeURIComponent(path)}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": contentType,
-    },
-    body: fileData as any,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Falha ao fazer upload no GCS: ${await response.text()}`);
-  }
-
-  return `https://storage.googleapis.com/${bucketName}/${path}`;
+  return frames;
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const body = req.method === "POST" ? await req.json() : {};
-    const action = body?.action as string | undefined;
-    const authHeader = req.headers.get("Authorization");
-    const profileId = actionsRequiringProfile.has(action || "")
-      ? await resolveProfileId(body?.userId, authHeader)
-      : null;
+    const supabaseServiceKey = Deno.env.get('SERVICE_ROLE_KEY')!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    if (!action) {
-      throw new Error("Ação não informada");
+    // Get user from auth header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      throw new Error('Authorization required');
     }
 
-    if (actionsRequiringProfile.has(action) && !profileId) {
-      throw new Error("Usuário não autenticado");
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new Error('Invalid user');
     }
 
-    if (action === "get-user") {
-      const { accessToken } = await getValidAccessToken(profileId!);
-      if (!accessToken) {
-        return respond({ connected: false });
-      }
+    const body = await req.json();
+    const { action, fileKey, nodeIds } = body;
 
-      const me = await fetchFromFigma("me", accessToken);
-      return respond({ connected: true, user: me });
-    }
+    console.log('Figma API action:', action, 'user:', user.id);
 
-    if (action === "disconnect") {
-      await supabaseAdmin
-        .from("profiles")
+    // Handle disconnect separately (doesn't need valid Figma token)
+    if (action === 'disconnect') {
+      console.log('Disconnecting Figma for user:', user.id);
+      
+      const { error: updateError } = await supabaseAdmin
+        .from('profiles')
         .update({
           figma_access_token: null,
           figma_refresh_token: null,
           figma_token_expires_at: null,
         })
-        .eq("id", profileId!);
-      return respond({ success: true });
-    }
+        .eq('user_id', user.id);
 
-    if (action === "get-file-history") {
-      const profile = await fetchProfileRecord(profileId!);
-      if (!profile?.user_id) {
-        throw new Error("Perfil inválido");
+      if (updateError) {
+        console.error('Error disconnecting Figma:', updateError);
+        throw new Error('Falha ao desconectar conta do Figma');
       }
 
-      const { data, error } = await supabaseAdmin
-        .from("figma_file_history")
-        .select("id,file_key,file_name,file_url,thumbnail_url,last_used_at")
-        .eq("user_id", profile.user_id)
-        .order("last_used_at", { ascending: false })
-        .limit(20);
-
-      if (error) {
-        throw error;
-      }
-
-      return respond({ files: data || [] });
-    }
-
-    if (action === "get-file-from-url") {
-      const url = body?.figmaUrl as string | undefined;
-      if (!url) {
-        throw new Error("URL do Figma não fornecida");
-      }
-
-      const fileKey = parseFileKeyFromUrl(url);
-      if (!fileKey) {
-        throw new Error("Não foi possível identificar o arquivo do Figma");
-      }
-
-      const { accessToken, profile } = await getValidAccessToken(profileId!);
-      if (!accessToken || !profile?.user_id) {
-        throw new Error("Conta do Figma não conectada");
-      }
-
-      const fileData = await fetchFromFigma(`files/${fileKey}`, accessToken);
-      const frames = extractFrames(fileData?.document);
-      const frameIds = frames.map((frame) => frame.id);
-
-      let thumbnails: Record<string, string> = {};
-      if (frameIds.length) {
-        const thumbResp = await fetchFromFigma(
-          `images/${fileKey}?ids=${encodeURIComponent(frameIds.join(","))}&format=png&scale=0.25`,
-          accessToken,
-        );
-        thumbnails = thumbResp?.images || {};
-      }
-
-      const framesWithThumb = frames.map((frame) => ({
-        id: frame.id,
-        name: frame.name,
-        pageName: frame.pageName,
-        thumbnailUrl: thumbnails[frame.id] || null,
-      }));
-
-      const normalizedUrl = normalizeFileUrl(url, fileKey);
-      await upsertHistory(profile.user_id, fileKey, fileData?.name || "Arquivo do Figma", normalizedUrl, thumbnails[frameIds[0]]);
-
-      return respond({
-        file: {
-          key: fileKey,
-          name: fileData?.name || "Arquivo do Figma",
-          url: normalizedUrl,
-        },
-        frames: framesWithThumb,
-      });
-    }
-
-    if (action === "export-frames") {
-      const fileKey = body?.fileKey as string | undefined;
-      const frames = (body?.frames as FrameSelection[] | undefined) ?? [];
-
-      if (!fileKey || frames.length === 0) {
-        throw new Error("Arquivo ou frames não informados");
-      }
-
-      if (!GCS_BUCKET_NAME) {
-        throw new Error("Bucket do GCS não configurado");
-      }
-
-      const { accessToken } = await getValidAccessToken(profileId!);
-      if (!accessToken) {
-        throw new Error("Conta do Figma não conectada");
-      }
-
-      const figmaResponse = await fetchFromFigma(
-        `images/${fileKey}?ids=${encodeURIComponent(frames.map((f) => f.id).join(","))}&format=png&scale=2`,
-        accessToken,
+      return new Response(
+        JSON.stringify({ success: true, message: 'Figma desconectado com sucesso' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-      const imageMap: Record<string, string> = figmaResponse?.images || {};
-
-      const gcsAccessToken = await getGcsAccessToken();
-      const uploaded: Array<{ nodeId: string; name: string; url: string }> = [];
-
-      for (const frame of frames) {
-        const imageUrl = imageMap[frame.id];
-        if (!imageUrl) continue;
-
-        const imageResp = await fetch(imageUrl);
-        if (!imageResp.ok) continue;
-
-        const buffer = new Uint8Array(await imageResp.arrayBuffer());
-        const path = `materials/${profileId}/figma/${frame.id}-${Date.now()}.png`;
-        const publicUrl = await uploadToGCS(GCS_BUCKET_NAME, path, buffer, "image/png", gcsAccessToken);
-
-        uploaded.push({
-          nodeId: frame.id,
-          name: frame.name,
-          url: publicUrl,
-        });
-      }
-
-      return respond({ frames: uploaded });
     }
 
-    throw new Error(`Ação desconhecida: ${action}`);
+    // Handle get-file-history separately (doesn't need Figma token)
+    if (action === 'get-file-history') {
+      const { data: history, error: historyError } = await supabaseAdmin
+        .from('figma_file_history')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('last_used_at', { ascending: false })
+        .limit(10);
+
+      if (historyError) {
+        console.error('Error fetching file history:', historyError);
+        return new Response(
+          JSON.stringify({ success: true, history: [] }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, history: history || [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Get valid Figma token for other actions
+    const { token: figmaToken, error: tokenError } = await getValidFigmaToken(supabaseAdmin, user.id);
+
+    if (tokenError || !figmaToken) {
+      return new Response(
+        JSON.stringify({ error: tokenError || 'Figma not connected', requiresAuth: true }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    switch (action) {
+      case 'get-user': {
+        const userData = await figmaRequest(figmaToken, '/me');
+        return new Response(
+          JSON.stringify({ success: true, user: userData }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-file-from-url': {
+        // Extract file key from Figma URL
+        const { figmaUrl } = body;
+        if (!figmaUrl) {
+          throw new Error('figmaUrl is required');
+        }
+
+        // Match URLs like:
+        // https://www.figma.com/design/AbCdEf123/Name
+        // https://www.figma.com/file/AbCdEf123/Name
+        // https://figma.com/design/AbCdEf123/Name
+        const match = figmaUrl.match(/figma\.com\/(design|file)\/([a-zA-Z0-9]+)/);
+        if (!match) {
+          throw new Error('URL do Figma inválida. Cole uma URL como: https://www.figma.com/design/...');
+        }
+
+        const extractedFileKey = match[2];
+        console.log('Extracted file key from URL:', extractedFileKey);
+
+        // Get file info
+        const fileData = await figmaRequest(figmaToken, `/files/${extractedFileKey}?depth=2`);
+        const frames = extractFrames(fileData.document);
+
+        // Fetch thumbnails for frames (max 50 to avoid API limits)
+        if (frames.length > 0) {
+          const framesToFetch = frames.slice(0, 50);
+          const nodeIds = framesToFetch.map((f: any) => f.id).join(',');
+          
+          try {
+            console.log('Fetching thumbnails for', framesToFetch.length, 'frames');
+            const thumbnailsData = await figmaRequest(
+              figmaToken, 
+              `/images/${extractedFileKey}?ids=${encodeURIComponent(nodeIds)}&format=png&scale=0.25`
+            );
+            
+            // Add thumbnailUrl to each frame
+            if (thumbnailsData?.images) {
+              frames.forEach((frame: any) => {
+                frame.thumbnailUrl = thumbnailsData.images[frame.id] || null;
+              });
+            }
+          } catch (thumbnailError) {
+            console.error('Error fetching thumbnails:', thumbnailError);
+            // Continue without thumbnails
+          }
+        }
+
+        // Save to file history (UPSERT)
+        try {
+          const { error: upsertError } = await supabaseAdmin
+            .from('figma_file_history')
+            .upsert({
+              user_id: user.id,
+              file_key: extractedFileKey,
+              file_name: fileData.name,
+              file_url: figmaUrl,
+              thumbnail_url: fileData.thumbnailUrl || null,
+              last_used_at: new Date().toISOString(),
+            }, {
+              onConflict: 'user_id,file_key',
+            });
+
+          if (upsertError) {
+            console.error('Error saving to file history:', upsertError);
+          } else {
+            console.log('File saved to history:', fileData.name);
+          }
+        } catch (historyErr) {
+          console.error('Error in file history upsert:', historyErr);
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            file: {
+              key: extractedFileKey,
+              name: fileData.name,
+              thumbnailUrl: fileData.thumbnailUrl
+            },
+            frames 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'get-file-frames': {
+        if (!fileKey) {
+          throw new Error('fileKey is required');
+        }
+        
+        // Get file structure
+        const fileData = await figmaRequest(figmaToken, `/files/${fileKey}?depth=2`);
+        const frames = extractFrames(fileData.document);
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            fileName: fileData.name,
+            thumbnailUrl: fileData.thumbnailUrl,
+            frames 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'export-frames': {
+        if (!fileKey || !nodeIds || nodeIds.length === 0) {
+          throw new Error('fileKey and nodeIds are required');
+        }
+
+        // Export frames as PNG
+        const ids = nodeIds.join(',');
+        const exportData = await figmaRequest(
+          figmaToken, 
+          `/images/${fileKey}?ids=${encodeURIComponent(ids)}&format=png&scale=2`
+        );
+
+        if (!exportData.images) {
+          throw new Error('Failed to export frames');
+        }
+
+        // Download images and upload to GCS
+        const GCS_BUCKET = Deno.env.get('GCS_BUCKET_NAME');
+        const GCS_KEY = Deno.env.get('GCS_SERVICE_ACCOUNT_KEY');
+
+        if (!GCS_BUCKET || !GCS_KEY) {
+          throw new Error('GCS not configured');
+        }
+
+        const results: { nodeId: string; url: string; name: string }[] = [];
+        const serviceAccount = JSON.parse(GCS_KEY);
+
+        for (const [nodeId, imageUrl] of Object.entries(exportData.images)) {
+          if (!imageUrl) continue;
+
+          try {
+            console.log('Downloading frame:', nodeId);
+            
+            // Download image from Figma
+            const imageResponse = await fetch(imageUrl as string);
+            if (!imageResponse.ok) {
+              console.error('Failed to download image:', nodeId);
+              continue;
+            }
+
+            const imageBuffer = await imageResponse.arrayBuffer();
+            const imageData = new Uint8Array(imageBuffer);
+
+            // Generate unique filename
+            const timestamp = Date.now();
+            const safeNodeId = nodeId.replace(/[^a-zA-Z0-9-_]/g, '_');
+            const fileName = `figma/${user.id}/${timestamp}_${safeNodeId}.png`;
+
+            // Upload to GCS
+            const accessToken = await getGCSAccessToken(serviceAccount);
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${encodeURIComponent(fileName)}`;
+
+            const uploadResponse = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'image/png',
+              },
+              body: imageData,
+            });
+
+            if (!uploadResponse.ok) {
+              const error = await uploadResponse.text();
+              console.error('GCS upload failed:', error);
+              continue;
+            }
+
+            // Make file public
+            await fetch(
+              `https://storage.googleapis.com/storage/v1/b/${GCS_BUCKET}/o/${encodeURIComponent(fileName)}/acl`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  entity: 'allUsers',
+                  role: 'READER',
+                }),
+              }
+            );
+
+            const publicUrl = `https://storage.googleapis.com/${GCS_BUCKET}/${fileName}`;
+            results.push({ nodeId, url: publicUrl, name: safeNodeId });
+            
+            console.log('Uploaded frame:', nodeId, '→', publicUrl);
+          } catch (err) {
+            console.error('Error processing frame:', nodeId, err);
+          }
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, frames: results }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
+    }
   } catch (error) {
-    console.error("Erro na função figma-api:", error);
-    return respond({ error: (error as Error).message }, 400);
+    console.error('Figma API error:', error);
+    
+    // Handle scope insufficient error - requires reconnection
+    if (error.message === 'SCOPE_INSUFFICIENT' || (error as any).requiresReconnect) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Permissões insuficientes - reconecte sua conta do Figma', 
+          requiresAuth: true 
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 });
+
+// Helper functions for GCS authentication
+async function getGCSAccessToken(serviceAccount: any): Promise<string> {
+  const jwt = await signJWT(serviceAccount);
+  
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+
+  const data = await response.json();
+  if (!data.access_token) {
+    throw new Error('Failed to get GCS access token');
+  }
+  
+  return data.access_token;
+}
+
+async function signJWT(serviceAccount: any): Promise<string> {
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: serviceAccount.client_email,
+    sub: serviceAccount.client_email,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+    scope: 'https://www.googleapis.com/auth/devstorage.full_control',
+  };
+
+  const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const signatureInput = `${encodedHeader}.${encodedPayload}`;
+
+  const privateKey = serviceAccount.private_key;
+  const pemContents = privateKey.replace(/-----BEGIN PRIVATE KEY-----/, '').replace(/-----END PRIVATE KEY-----/, '').replace(/\s/g, '');
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    new TextEncoder().encode(signatureInput)
+  );
+
+  const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+  return `${signatureInput}.${encodedSignature}`;
+}

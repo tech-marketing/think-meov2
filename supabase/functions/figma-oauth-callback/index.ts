@@ -1,174 +1,128 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
-  auth: { persistSession: false },
-});
-
-function getDefaultRedirectUri() {
-  try {
-    const url = new URL(supabaseUrl);
-    const hostnameParts = url.hostname.split(".");
-    if (hostnameParts.length < 2) return null;
-    const projectId = hostnameParts[0];
-    const domain = hostnameParts.slice(1).join(".");
-    return `${url.protocol}//${projectId}.functions.${domain}/figma-oauth-callback`;
-  } catch {
-    return null;
-  }
-}
-
-const FIGMA_CLIENT_ID = Deno.env.get("FIGMA_OAUTH_CLIENT_ID");
-const FIGMA_CLIENT_SECRET = Deno.env.get("FIGMA_OAUTH_CLIENT_SECRET");
-const FIGMA_REDIRECT_URI = Deno.env.get("FIGMA_OAUTH_REDIRECT_URI") || getDefaultRedirectUri();
-const FIGMA_AUTH_SUCCESS_URL = Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://statuesque-rugelach-635698.netlify.app";
-
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const url = new URL(req.url);
-    const code = url.searchParams.get("code");
-    const rawState = url.searchParams.get("state");
-    let stateProfileId: string | null = null;
-    let stateOrigin: string | null = null;
-
-    if (rawState) {
-      try {
-        const decoded = JSON.parse(decodeURIComponent(rawState));
-        stateProfileId = decoded?.profileId || null;
-        stateOrigin = decoded?.origin || null;
-      } catch {
-        stateProfileId = rawState;
-      }
-    }
-    const errorParam = url.searchParams.get("error");
-
-    if (errorParam) {
-      console.error("Erro retornado pelo Figma:", errorParam);
-      return htmlResponse("Ocorreu um erro ao conectar com o Figma. Você já pode fechar esta janela.", {
-        queryParam: "figma_error",
-        value: "oauth_error",
-      });
-    }
-
-    if (!code || !stateProfileId) {
-      return htmlResponse("Requisição inválida.", { queryParam: "figma_error", value: "invalid_request" });
-    }
+    const FIGMA_CLIENT_ID = Deno.env.get('FIGMA_OAUTH_CLIENT_ID');
+    const FIGMA_CLIENT_SECRET = Deno.env.get('FIGMA_OAUTH_CLIENT_SECRET');
+    const FIGMA_REDIRECT_URI = Deno.env.get('FIGMA_OAUTH_REDIRECT_URI');
+    const APP_URL = Deno.env.get('FIGMA_AUTH_SUCCESS_URL') || Deno.env.get('APP_URL');
+    
+    const supabaseUrl = 'https://oprscgxsfldzydbrbioz.supabase.co';
+    const supabaseServiceKey = Deno.env.get('SERVICE_ROLE_KEY')!;
 
     if (!FIGMA_CLIENT_ID || !FIGMA_CLIENT_SECRET || !FIGMA_REDIRECT_URI) {
-      return htmlResponse("Configurações de OAuth não encontradas.", {
-        queryParam: "figma_error",
-        value: "missing_config",
+      throw new Error('Figma OAuth credentials not configured');
+    }
+
+    if (!supabaseServiceKey) {
+      throw new Error('SERVICE_ROLE_KEY not configured');
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    const url = new URL(req.url);
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    const error = url.searchParams.get('error');
+
+    console.log('Figma OAuth callback received:', { code: !!code, state: !!state, error });
+
+    if (error) {
+      console.error('Figma OAuth error:', error);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          'Location': `${APP_URL}?figma_error=${encodeURIComponent(error)}`,
+        },
       });
     }
 
-    const tokenResponse = await fetch("https://www.figma.com/api/oauth/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    if (!code) {
+      throw new Error('No authorization code provided');
+    }
+
+    // Extract user_id from state
+    const userId = state ? decodeURIComponent(state) : null;
+    if (!userId) {
+      throw new Error('No user ID in state');
+    }
+
+    console.log('Exchanging code for token for user:', userId);
+
+    // Exchange code for access token
+    console.log('Exchanging code for token with Figma API...');
+    const tokenResponse = await fetch('https://api.figma.com/v1/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
         client_id: FIGMA_CLIENT_ID,
         client_secret: FIGMA_CLIENT_SECRET,
         redirect_uri: FIGMA_REDIRECT_URI,
-        code,
-        grant_type: "authorization_code",
+        code: code,
+        grant_type: 'authorization_code',
       }),
     });
 
-    if (!tokenResponse.ok) {
-      console.error("Falha ao trocar código por token:", await tokenResponse.text());
-      return htmlResponse("Erro ao finalizar autenticação com o Figma.", {
-        queryParam: "figma_error",
-        value: "token_exchange",
-      });
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenResponse.ok || !tokenData.access_token) {
+      console.error('Token exchange failed:', tokenData);
+      throw new Error('Failed to exchange code for token');
     }
 
-    const tokenData = await tokenResponse.json();
-    const expiresAt = tokenData.expires_in
-      ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
-      : null;
+    console.log('Token exchange successful, expires_in:', tokenData.expires_in);
 
-    await supabaseAdmin
-      .from("profiles")
+    const accessToken = tokenData.access_token;
+    const refreshToken = tokenData.refresh_token;
+    const expiresIn = tokenData.expires_in || 7200; // Default 2 hours
+
+    // Calculate expiration time
+    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    // Store tokens in profiles table
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
       .update({
-        figma_access_token: tokenData.access_token,
-        figma_refresh_token: tokenData.refresh_token || null,
-        figma_token_expires_at: expiresAt,
+        figma_access_token: accessToken,
+        figma_refresh_token: refreshToken,
+        figma_token_expires_at: expiresAt.toISOString(),
       })
-      .eq("id", stateProfileId);
+      .eq('user_id', userId);
 
-    const postMessageOrigin = stateOrigin || "*";
-    const fallbackUrl = FIGMA_AUTH_SUCCESS_URL || "";
-    const successUrl = buildRedirectUrl("figma_connected", "true", fallbackUrl);
+    if (updateError) {
+      console.error('Failed to update profile:', updateError);
+      throw updateError;
+    }
 
-    const redirectHtml = `
-      <html>
-        <body style="font-family: sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh;">
-          <p>Autenticação concluída! Você já pode fechar esta janela.</p>
-          <script>
-            const redirectUrl = ${JSON.stringify(successUrl)};
-            if (window.opener) {
-              try {
-                window.opener.postMessage({ type: 'FIGMA_AUTH_SUCCESS' }, ${JSON.stringify(postMessageOrigin)});
-              } catch (postMessageError) {
-                console.warn('Falha ao enviar mensagem para janela principal:', postMessageError);
-              }
-            }
-            setTimeout(() => {
-              window.close();
-              setTimeout(() => {
-                window.location.href = redirectUrl;
-              }, 600);
-            }, 600);
-          </script>
-        </body>
-      </html>
-    `;
+    console.log('Successfully connected Figma account for user:', userId);
 
-    return new Response(redirectHtml, {
+    // Redirect back to app with success
+    return new Response(null, {
+      status: 302,
       headers: {
-        "Content-Type": "text/html",
-        ...corsHeaders,
+        'Location': `${APP_URL}?figma_connected=true`,
       },
     });
   } catch (error) {
-    console.error("Erro na função figma-oauth-callback:", error);
-    return htmlResponse("Ocorreu um erro ao processar sua autenticação.", {
-      queryParam: "figma_error",
-      value: "unexpected",
+    console.error('Figma OAuth callback error:', error);
+    const APP_URL = Deno.env.get('FIGMA_AUTH_SUCCESS_URL') || Deno.env.get('APP_URL');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `${APP_URL}?figma_error=${encodeURIComponent(error.message)}`,
+      },
     });
   }
 });
-
-function buildRedirectUrl(param: string, value: string, fallback?: string | null) {
-  const base = fallback || Deno.env.get("FIGMA_AUTH_SUCCESS_URL") || Deno.env.get("APP_URL") || "https://statuesque-rugelach-635698.netlify.app";
-  try {
-    const url = new URL(base);
-    url.searchParams.set(param, value);
-    return url.toString();
-  } catch {
-    return `${base}?${encodeURIComponent(param)}=${encodeURIComponent(value)}`;
-  }
-}
-
-function htmlResponse(message: string, options?: { queryParam?: string; value?: string }) {
-  const redirectUrl = options?.queryParam
-    ? buildRedirectUrl(options.queryParam, options.value || "true", FIGMA_AUTH_SUCCESS_URL)
-    : null;
-  return new Response(
-    `<html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;">
-      ${message}
-      ${redirectUrl ? `<script>setTimeout(() => { window.location.href = ${JSON.stringify(redirectUrl)}; }, 1200);</script>` : ""}
-    </body></html>`,
-    { headers: { "Content-Type": "text/html", ...corsHeaders } },
-  );
-}
