@@ -8,7 +8,7 @@ const corsHeaders = {
 
 const supabaseUrl = 'https://oprscgxsfldzydbrbioz.supabase.co';
 const HISTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_FRAMES = 50;
+const THUMBNAIL_BATCH_SIZE = 50;
 
 // Helper to refresh Figma token if expired
 async function refreshFigmaToken(supabaseAdmin: any, userId: string, refreshToken: string): Promise<string | null> {
@@ -373,29 +373,28 @@ serve(async (req) => {
 
         // Get file info
         const fileData = await figmaRequest(figmaToken, `/files/${extractedFileKey}?depth=2`);
-        const frames = extractFrames(fileData.document).slice(0, MAX_FRAMES);
+        const frames = extractFrames(fileData.document);
 
-        // Fetch thumbnails for frames (max 50 to avoid API limits)
+        // Fetch thumbnails for all frames in batches of 50
         if (frames.length > 0) {
-          const framesToFetch = frames.slice(0, MAX_FRAMES);
-          const nodeIds = framesToFetch.map((f: any) => f.id).join(',');
-          
           try {
-            console.log('Fetching thumbnails for', framesToFetch.length, 'frames');
-            const thumbnailsData = await figmaRequest(
-              figmaToken, 
-              `/images/${extractedFileKey}?ids=${encodeURIComponent(nodeIds)}&format=png&scale=0.25`
-            );
-            
-            // Add thumbnailUrl to each frame
-            if (thumbnailsData?.images) {
-              frames.forEach((frame: any) => {
-                frame.thumbnailUrl = thumbnailsData.images[frame.id] || null;
-              });
+            for (let i = 0; i < frames.length; i += THUMBNAIL_BATCH_SIZE) {
+              const batch = frames.slice(i, i + THUMBNAIL_BATCH_SIZE);
+              const nodeIds = batch.map((f: any) => f.id).join(',');
+
+              const thumbnailsData = await figmaRequest(
+                figmaToken,
+                `/images/${extractedFileKey}?ids=${encodeURIComponent(nodeIds)}&format=png&scale=0.25`
+              );
+
+              if (thumbnailsData?.images) {
+                batch.forEach((frame: any) => {
+                  frame.thumbnailUrl = thumbnailsData.images[frame.id] || null;
+                });
+              }
             }
           } catch (thumbnailError) {
             console.error('Error fetching thumbnails:', thumbnailError);
-            // Continue without thumbnails
           }
         }
 

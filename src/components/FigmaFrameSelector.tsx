@@ -189,6 +189,9 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
     }
   };
 
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState("Buscando seus frames...");
+
   const loadFileFromUrl = async (url?: string) => {
     const urlToLoad = url || figmaUrl;
     if (!urlToLoad.trim()) {
@@ -201,11 +204,21 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
     }
 
     setLoading(true);
+    setLoadingProgress(0);
+    setLoadingMessage("Buscando seus frames...");
     setLoadedFile(null);
     setFrames([]);
     setSelectedFrames(new Set());
 
     try {
+      const interval = setInterval(() => {
+        setLoadingProgress((prev) => (prev >= 95 ? 95 : prev + 5));
+      }, 400);
+
+      setTimeout(() => setLoadingMessage("Buscando seus frames... 30%"), 300);
+      setTimeout(() => setLoadingMessage("Buscando seus frames... 60%"), 800);
+      setTimeout(() => setLoadingMessage("Buscando seus frames... 90%"), 1500);
+
       const { data, error } = await supabase.functions.invoke('figma-api', {
         body: { action: 'get-file-from-url', figmaUrl: urlToLoad.trim() }
       });
@@ -221,6 +234,10 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         });
         return;
       }
+
+      clearInterval(interval);
+      setLoadingProgress(100);
+      setLoadingMessage("Buscando seus frames... 100%");
 
       if (data?.file) {
         setLoadedFile(data.file);
@@ -245,6 +262,7 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
       });
     } finally {
       setLoading(false);
+      setLoadingProgress(0);
     }
   };
 
@@ -364,8 +382,21 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         <div className="flex-1 overflow-hidden">
           {/* Loading state */}
           {loading && !exporting && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="w-full max-w-sm bg-muted rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary/70 via-primary to-primary/70 animate-[pulse_1.5s_ease-in-out_infinite]"
+                  style={{ width: `${loadingProgress}%` }}
+                />
+              </div>
+              <div className="flex flex-col items-center gap-2 text-center">
+                <p className="text-sm text-muted-foreground font-light" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  {loadingMessage}
+                </p>
+                <p className="text-xs text-muted-foreground font-light" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                  {loadingProgress.toFixed(0)}%
+                </p>
+              </div>
             </div>
           )}
 
