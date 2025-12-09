@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +65,89 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const { toast } = useToast();
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState("Buscando seus frames...");
+  const progressAnimationRef = useRef<number | null>(null);
+  const progressValueRef = useRef(0);
+  const progressTimeoutsRef = useRef<number[]>([]);
+  const completionTimeoutRef = useRef<number | null>(null);
+
+  const clearProgressTimeouts = () => {
+    progressTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    progressTimeoutsRef.current = [];
+  };
+
+  const clearCompletionTimeout = () => {
+    if (completionTimeoutRef.current !== null) {
+      window.clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
+  };
+
+  const stopProgressAnimation = () => {
+    if (progressAnimationRef.current !== null) {
+      cancelAnimationFrame(progressAnimationRef.current);
+      progressAnimationRef.current = null;
+    }
+  };
+
+  const cleanupProgressResources = () => {
+    clearProgressTimeouts();
+    clearCompletionTimeout();
+    stopProgressAnimation();
+  };
+
+  const animateProgressTo = (target: number, duration = 1000) => {
+    stopProgressAnimation();
+    const startValue = progressValueRef.current;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = startValue + (target - startValue) * (1 - Math.pow(1 - t, 3));
+      progressValueRef.current = eased;
+      setLoadingProgress(eased);
+
+      if (t < 1) {
+        progressAnimationRef.current = requestAnimationFrame(tick);
+      } else {
+        progressAnimationRef.current = null;
+      }
+    };
+
+    progressAnimationRef.current = requestAnimationFrame(tick);
+  };
+
+  const queueProgressTimeout = (fn: () => void, delay: number) => {
+    const timeoutId = window.setTimeout(fn, delay);
+    progressTimeoutsRef.current.push(timeoutId);
+  };
+
+  const startProgressAnimation = () => {
+    cleanupProgressResources();
+    progressValueRef.current = 0;
+    setLoadingProgress(0);
+    animateProgressTo(45, 1400);
+    queueProgressTimeout(() => animateProgressTo(70, 2200), 600);
+    queueProgressTimeout(() => animateProgressTo(92, 3200), 1800);
+  };
+
+  const finishProgressAnimation = () => {
+    clearProgressTimeouts();
+    stopProgressAnimation();
+    clearCompletionTimeout();
+    animateProgressTo(100, 500);
+    completionTimeoutRef.current = window.setTimeout(() => {
+      resetProgressAnimation();
+    }, 800);
+  };
+
+  const resetProgressAnimation = () => {
+    cleanupProgressResources();
+    progressValueRef.current = 0;
+    setLoadingProgress(0);
+  };
 
   // Check if user is connected to Figma
   useEffect(() => {
@@ -189,8 +272,27 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
     }
   };
 
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState("Buscando seus frames...");
+  useEffect(() => {
+    if (!loading) return;
+
+    if (loadingProgress < 15) {
+      setLoadingMessage("Conectando ao Figma...");
+    } else if (loadingProgress < 45) {
+      setLoadingMessage("Buscando seu arquivo...");
+    } else if (loadingProgress < 75) {
+      setLoadingMessage("Processando frames...");
+    } else if (loadingProgress < 100) {
+      setLoadingMessage("Preparando miniaturas...");
+    } else {
+      setLoadingMessage("Concluindo...");
+    }
+  }, [loadingProgress, loading]);
+
+  useEffect(() => {
+    return () => {
+      cleanupProgressResources();
+    };
+  }, []);
 
   const loadFileFromUrl = async (url?: string) => {
     const urlToLoad = url || figmaUrl;
@@ -204,21 +306,14 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
     }
 
     setLoading(true);
-    setLoadingProgress(0);
-    setLoadingMessage("Buscando seus frames...");
+    setLoadingMessage("Conectando ao Figma...");
     setLoadedFile(null);
     setFrames([]);
     setSelectedFrames(new Set());
+    startProgressAnimation();
 
+    let completedSuccessfully = false;
     try {
-      const interval = setInterval(() => {
-        setLoadingProgress((prev) => (prev >= 95 ? 95 : prev + 5));
-      }, 400);
-
-      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 300);
-      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 800);
-      setTimeout(() => setLoadingMessage("Buscando seus frames..."), 1500);
-
       const { data, error } = await supabase.functions.invoke('figma-api', {
         body: { action: 'get-file-from-url', figmaUrl: urlToLoad.trim() }
       });
@@ -226,6 +321,7 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
       if (error) throw error;
 
       if (data?.requiresAuth) {
+        resetProgressAnimation();
         setIsConnected(false);
         toast({
           title: "Reconecte sua conta",
@@ -235,9 +331,8 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         return;
       }
 
-      clearInterval(interval);
-      setLoadingProgress(100);
-      setLoadingMessage("Buscando seus frames...");
+      completedSuccessfully = true;
+      finishProgressAnimation();
 
       if (data?.file) {
         setLoadedFile(data.file);
@@ -254,6 +349,7 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         }
       }
     } catch (err: any) {
+      resetProgressAnimation();
       console.error('Error loading Figma file:', err);
       toast({
         title: "Erro ao carregar arquivo",
@@ -262,7 +358,9 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
       });
     } finally {
       setLoading(false);
-      setLoadingProgress(0);
+      if (!completedSuccessfully) {
+        resetProgressAnimation();
+      }
     }
   };
 
