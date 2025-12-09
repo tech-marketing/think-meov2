@@ -69,13 +69,10 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
   const [loadingMessage, setLoadingMessage] = useState("Buscando seus frames...");
   const progressAnimationRef = useRef<number | null>(null);
   const progressValueRef = useRef(0);
-  const progressTimeoutsRef = useRef<number[]>([]);
   const completionTimeoutRef = useRef<number | null>(null);
-
-  const clearProgressTimeouts = () => {
-    progressTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
-    progressTimeoutsRef.current = [];
-  };
+  const progressActiveRef = useRef(false);
+  const PROGRESS_DURATION_MS = 120000;
+  const MAX_AUTO_PROGRESS = 99;
 
   const clearCompletionTimeout = () => {
     if (completionTimeoutRef.current !== null) {
@@ -92,7 +89,7 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
   };
 
   const cleanupProgressResources = () => {
-    clearProgressTimeouts();
+    progressActiveRef.current = false;
     clearCompletionTimeout();
     stopProgressAnimation();
   };
@@ -119,24 +116,36 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
     progressAnimationRef.current = requestAnimationFrame(tick);
   };
 
-  const queueProgressTimeout = (fn: () => void, delay: number) => {
-    const timeoutId = window.setTimeout(fn, delay);
-    progressTimeoutsRef.current.push(timeoutId);
-  };
-
   const startProgressAnimation = () => {
     cleanupProgressResources();
+    progressActiveRef.current = true;
     progressValueRef.current = 0;
     setLoadingProgress(0);
-    animateProgressTo(45, 1400);
-    queueProgressTimeout(() => animateProgressTo(70, 2200), 600);
-    queueProgressTimeout(() => animateProgressTo(92, 3200), 1800);
+    const startTimestamp = performance.now();
+
+    const animate = (now: number) => {
+      if (!progressActiveRef.current) return;
+      const elapsed = now - startTimestamp;
+      const ratio = Math.min(elapsed / PROGRESS_DURATION_MS, 1);
+      const target = ratio * MAX_AUTO_PROGRESS;
+
+      if (target > progressValueRef.current) {
+        progressValueRef.current = target;
+        setLoadingProgress(target);
+      }
+
+      if (ratio < 1) {
+        progressAnimationRef.current = requestAnimationFrame(animate);
+      } else {
+        progressAnimationRef.current = null;
+      }
+    };
+
+    progressAnimationRef.current = requestAnimationFrame(animate);
   };
 
   const finishProgressAnimation = () => {
-    clearProgressTimeouts();
-    stopProgressAnimation();
-    clearCompletionTimeout();
+    cleanupProgressResources();
     animateProgressTo(100, 500);
     completionTimeoutRef.current = window.setTimeout(() => {
       resetProgressAnimation();
