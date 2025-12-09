@@ -219,8 +219,9 @@ export const FigmaFrameSelector = ({ open, onOpenChange, onFramesImported }: Fig
         body: { action: 'get-file-history' }
       });
 
-      if (!error && data?.history) {
-        setRecentFiles(data.history);
+      if (!error) {
+        const history = Array.isArray(data?.history) ? data.history : Array.isArray(data?.files) ? data.files : [];
+        setRecentFiles(history);
       }
     } catch (err) {
       console.error('Error loading file history:', err);
