@@ -56,7 +56,7 @@ const BriefingEditor = () => {
 
   const processGeneration = async (payload: any) => {
     try {
-      const response = await fetch('https://hook.us2.make.com/dhfsns1l505z4y1knzui4koxynb9vgtw', {
+      const response = await fetch('https://n8n-production-4de3.up.railway.app/webhook/019ef1f6-f44c-47f6-9ab4-49465de13d55', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
