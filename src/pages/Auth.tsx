@@ -12,6 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import BackgroundShader from '@/components/ui/background-shader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ThinkMeoLogo } from "@/components/ThinkMeoLogo";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 export default function Auth() {
   const navigate = useNavigate();
   const {
@@ -29,6 +37,10 @@ export default function Auth() {
     confirmPassword: '',
     fullName: ''
   });
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
   useEffect(() => {
     if (user) {
       navigate('/');
@@ -141,6 +153,50 @@ export default function Auth() {
       setLoading(false);
     }
   };
+  const handleForgotPasswordSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!forgotPasswordEmail.trim()) {
+      toast({
+        title: "Informe um email válido",
+        description: "Digite o email associado à sua conta.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('request-pasword-reset', {
+        body: { email: forgotPasswordEmail.trim() }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setForgotPasswordSent(true);
+      toast({
+        title: "Verifique seu email",
+        description: "Se o email estiver cadastrado, você receberá um link para redefinir a senha."
+      });
+    } catch (error: any) {
+      console.error('Erro ao solicitar redefinição:', error);
+      toast({
+        title: "Erro ao enviar link",
+        description: error.message || "Não foi possível enviar o link de redefinição. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  const closeForgotPasswordModal = () => {
+    setForgotPasswordOpen(false);
+    setForgotPasswordLoading(false);
+    setForgotPasswordSent(false);
+    setForgotPasswordEmail("");
+  };
   if (user) {
     return <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin" />
@@ -197,10 +253,9 @@ export default function Auth() {
                     className="text-xs text-foreground hover:underline"
                     onClick={e => {
                       e.preventDefault();
-                      toast({
-                        title: "Em breve",
-                        description: "Funcionalidade de recuperação de senha será implementada em breve."
-                      });
+                      setForgotPasswordSent(false);
+                      setForgotPasswordEmail(formData.email);
+                      setForgotPasswordOpen(true);
                     }}
                   >
                     Esqueceu sua senha?
@@ -272,5 +327,62 @@ export default function Auth() {
       {/* Institutional Text */}
 
     </div>
+    <Dialog open={forgotPasswordOpen} onOpenChange={open => open ? setForgotPasswordOpen(true) : closeForgotPasswordModal()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Esqueceu sua senha?</DialogTitle>
+          <DialogDescription>
+            Informe seu email e enviaremos um link para redefinir sua senha.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="forgot-password-email">Email</Label>
+            <Input
+              id="forgot-password-email"
+              type="email"
+              placeholder="seu@email.com"
+              value={forgotPasswordEmail}
+              onChange={e => setForgotPasswordEmail(e.target.value)}
+              required
+              disabled={forgotPasswordLoading || forgotPasswordSent}
+            />
+          </div>
+
+          {forgotPasswordSent && (
+            <p className="text-sm text-primary">
+              Se o email existir em nossa base, você receberá um link de redefinição nos próximos minutos.
+            </p>
+          )}
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeForgotPasswordModal}
+              disabled={forgotPasswordLoading}
+              className="w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="w-full sm:w-auto auth-button-gradient"
+              disabled={forgotPasswordLoading || forgotPasswordSent}
+            >
+              {forgotPasswordLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                'Enviar link'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
