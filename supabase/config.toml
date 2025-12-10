@@ -83,3 +83,9 @@ verify_jwt = false
 
 [functions.figma-api]
 verify_jwt = true
+
+[functions.request-pasword-reset]
+verify_jwt = false
+
+[functions.verify-reset-token]
+verify_jwt = false
